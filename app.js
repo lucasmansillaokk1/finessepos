@@ -129,6 +129,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
     document.querySelectorAll('[id^="seccion-"]').forEach(s => s.style.display = 'none')
     document.getElementById('seccion-' + seccion).style.display = 'block'
 
+    if (seccion === 'dashboard') cargarDashboard()
     if (seccion === 'productos') cargarProductos()
     if (seccion === 'historial') cargarHistorial()
     if (seccion === 'caja') cargarCaja()
@@ -145,6 +146,8 @@ function mostrarApp() {
   document.getElementById('pantalla-login').style.display = 'none'
   document.getElementById('pantalla-app').style.display = 'block'
   document.getElementById('nav-email').textContent = negocioActual.nombre
+  actualizarPerfilSidebar()
+  cargarDashboard()
 }
 
 // ── MENSAJE LOGIN ──
@@ -185,7 +188,7 @@ async function cargarProductos() {
       <td>${p.stock}</td>
       <td>${p.categoria || '-'}</td>
       <td class="acciones">
-        <button class="btn-editar" onclick="abrirEditar('${p.id}', '${p.nombre}', ${p.precio}, ${p.stock}, '${p.categoria || ''}', '${p.codigo || ''}')">Editar</button>
+        <button class="btn-editar" onclick="abrirEditar('${p.id}', '${p.nombre}', ${p.precio}, ${p.stock}, '${p.categoria || ''}', '${p.codigo || ''}', ${p.costo || 0})">Editar</button>
         <button class="btn-rojo" onclick="eliminarProducto('${p.id}')">Eliminar</button>
       </td>
     </tr>
@@ -201,6 +204,7 @@ document.getElementById('btn-nuevo-producto').addEventListener('click', () => {
   document.getElementById('producto-stock').value = ''
   document.getElementById('producto-categoria').value = ''
   document.getElementById('producto-codigo').value = ''
+  document.getElementById('producto-costo').value = ''
   document.getElementById('modal-producto').style.display = 'flex'
   lucide.createIcons()
 })
@@ -221,6 +225,8 @@ document.getElementById('btn-guardar-producto').addEventListener('click', async 
   const stock = parseInt(document.getElementById('producto-stock').value)
   const categoria = document.getElementById('producto-categoria').value.trim()
   const codigo = document.getElementById('producto-codigo').value.trim()
+  const costoInput = document.getElementById('producto-costo').value
+  const costo = costoInput ? parseFloat(costoInput) : null
 
   if (!nombre || isNaN(precio) || isNaN(stock)) {
     alert('Completá nombre, precio y stock')
@@ -228,9 +234,9 @@ document.getElementById('btn-guardar-producto').addEventListener('click', async 
   }
 
   if (id) {
-    await db.from('productos').update({ nombre, precio, stock, categoria, codigo }).eq('id', id)
+    await db.from('productos').update({ nombre, precio, stock, categoria, codigo, costo }).eq('id', id)
   } else {
-    await db.from('productos').insert({ nombre, precio, stock, categoria, codigo, negocio_id: negocioActual.id })
+    await db.from('productos').insert({ nombre, precio, stock, categoria, codigo, costo, negocio_id: negocioActual.id })
   }
 
   document.getElementById('modal-producto').style.display = 'none'
@@ -238,7 +244,7 @@ document.getElementById('btn-guardar-producto').addEventListener('click', async 
 })
 
 // ── EDITAR PRODUCTO ──
-function abrirEditar(id, nombre, precio, stock, categoria, codigo) {
+function abrirEditar(id, nombre, precio, stock, categoria, codigo, costo) {
   document.getElementById('modal-titulo').textContent = 'Editar producto'
   document.getElementById('producto-id').value = id
   document.getElementById('producto-nombre').value = nombre
@@ -246,6 +252,7 @@ function abrirEditar(id, nombre, precio, stock, categoria, codigo) {
   document.getElementById('producto-stock').value = stock
   document.getElementById('producto-categoria').value = categoria
   document.getElementById('producto-codigo').value = codigo
+  document.getElementById('producto-costo').value = costo || ''
   document.getElementById('modal-producto').style.display = 'flex'
   lucide.createIcons()
 }
@@ -462,7 +469,7 @@ async function cargarHistorial() {
 
   tbody.innerHTML = ventas.map(v => {
     const fecha = new Date(v.fecha)
-    const fechaTexto = fecha.toLocaleDateString('es-AR') + ' - ' + fecha.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})
+    const fechaTexto = fecha.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'}) + ' - ' + fecha.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'})
 
     return `
       <tr class="fila-venta" onclick="toggleDetalle('${v.id}')">
@@ -626,7 +633,7 @@ async function renderizarCaja(inicio, fin) {
 
   tbody.innerHTML = movimientos.map(m => `
     <tr>
-      <td>${m.hora.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})}</td>
+      <td>${m.hora.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'})}</td>
       <td><span class="badge-metodo">${m.tipo}</span></td>
       <td>${m.descripcion}</td>
       <td style="color:${m.positivo ? 'var(--verde)' : '#dc2626'}">${m.positivo ? '+' : '-'}$${m.monto.toLocaleString('es-AR')}</td>
@@ -671,6 +678,143 @@ document.getElementById('btn-registrar-egreso').addEventListener('click', async 
   document.getElementById('egreso-monto').value = ''
   document.getElementById('egreso-descripcion').value = ''
   cargarCaja()
+})
+
+// ── DASHBOARD ──
+async function cargarDashboard() {
+  const ahora = new Date()
+  const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0).toISOString()
+  const finHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59).toISOString()
+  const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0).toISOString()
+
+  // VENTAS DEL DÍA
+  const { data: ventasHoy } = await db
+    .from('ventas')
+    .select('total')
+    .eq('negocio_id', negocioActual.id)
+    .gte('fecha', inicioHoy)
+    .lte('fecha', finHoy)
+
+  const totalHoy = (ventasHoy || []).reduce((acc, v) => acc + Number(v.total), 0)
+
+  // VENTAS DEL MES
+  const { data: ventasMes } = await db
+    .from('ventas')
+    .select('total')
+    .eq('negocio_id', negocioActual.id)
+    .gte('fecha', inicioMes)
+
+  const totalMes = (ventasMes || []).reduce((acc, v) => acc + Number(v.total), 0)
+  const cantidadVentasMes = (ventasMes || []).length
+
+  // CANTIDAD DE PRODUCTOS
+  const { count: cantidadProductos } = await db
+    .from('productos')
+    .select('*', { count: 'exact', head: true })
+    .eq('negocio_id', negocioActual.id)
+
+  // TICKET PROMEDIO (del mes)
+  const ticketPromedio = cantidadVentasMes > 0 ? totalMes / cantidadVentasMes : 0
+
+  // RENDERIZAR
+  document.querySelector('#seccion-dashboard .card:nth-child(1) .card-valor').textContent = '$' + totalHoy.toLocaleString('es-AR')
+  document.querySelector('#seccion-dashboard .card:nth-child(2) .card-valor').textContent = '$' + totalMes.toLocaleString('es-AR')
+  document.querySelector('#seccion-dashboard .card:nth-child(3) .card-valor').textContent = (cantidadProductos || 0).toString()
+  document.querySelector('#seccion-dashboard .card:nth-child(4) .card-valor').textContent = '$' + Math.round(ticketPromedio).toLocaleString('es-AR')
+}
+
+// ── PERFIL / AJUSTES ──
+function actualizarPerfilSidebar() {
+  document.getElementById('sidebar-nombre-negocio').textContent = negocioActual.nombre
+  document.getElementById('avatar-iniciales').textContent = negocioActual.nombre.charAt(0).toUpperCase()
+}
+
+document.getElementById('btn-abrir-ajustes').addEventListener('click', () => {
+  document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'))
+  document.querySelectorAll('[id^="seccion-"]').forEach(s => s.style.display = 'none')
+  document.getElementById('seccion-ajustes').style.display = 'block'
+
+  document.getElementById('ajustes-nombre').value = negocioActual.nombre
+  document.getElementById('ajustes-rubro').value = negocioActual.rubro
+
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('mobile-abierto')
+    document.getElementById('sidebar-overlay').classList.remove('visible')
+  }
+})
+
+document.getElementById('btn-guardar-ajustes').addEventListener('click', async () => {
+  const nombre = document.getElementById('ajustes-nombre').value.trim()
+  const rubro = document.getElementById('ajustes-rubro').value
+
+  if (!nombre) {
+    document.getElementById('ajustes-mensaje').style.color = '#dc2626'
+    document.getElementById('ajustes-mensaje').textContent = 'El nombre no puede estar vacío'
+    return
+  }
+
+  const { error } = await db.from('negocios').update({ nombre, rubro }).eq('id', negocioActual.id)
+
+  if (error) {
+    document.getElementById('ajustes-mensaje').style.color = '#dc2626'
+    document.getElementById('ajustes-mensaje').textContent = 'Error al guardar'
+    return
+  }
+
+  negocioActual.nombre = nombre
+  negocioActual.rubro = rubro
+  actualizarPerfilSidebar()
+  document.getElementById('nav-email').textContent = nombre
+
+  document.getElementById('ajustes-mensaje').style.color = 'var(--verde)'
+  document.getElementById('ajustes-mensaje').textContent = 'Cambios guardados!'
+})
+
+// ── MODO OSCURO ──
+const toggleTema = document.getElementById('toggle-tema')
+
+function aplicarTemaGuardado() {
+  const temaGuardado = localStorageDisponible() ? localStorage.getItem('finesse-tema') : null
+  if (temaGuardado === 'oscuro') {
+    document.body.classList.add('modo-oscuro')
+    toggleTema.checked = true
+  }
+}
+
+function localStorageDisponible() {
+  try {
+    return typeof localStorage !== 'undefined'
+  } catch {
+    return false
+  }
+}
+
+toggleTema.addEventListener('change', () => {
+  if (toggleTema.checked) {
+    document.body.classList.add('modo-oscuro')
+    if (localStorageDisponible()) localStorage.setItem('finesse-tema', 'oscuro')
+  } else {
+    document.body.classList.remove('modo-oscuro')
+    if (localStorageDisponible()) localStorage.setItem('finesse-tema', 'claro')
+  }
+})
+
+aplicarTemaGuardado()
+
+// ── LOGO LLEVA AL DASHBOARD ──
+document.getElementById('btn-ir-dashboard').addEventListener('click', () => {
+  document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'))
+  document.querySelector('.menu-item[data-seccion="dashboard"]').classList.add('active')
+
+  document.querySelectorAll('[id^="seccion-"]').forEach(s => s.style.display = 'none')
+  document.getElementById('seccion-dashboard').style.display = 'block'
+
+  cargarDashboard()
+
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('mobile-abierto')
+    document.getElementById('sidebar-overlay').classList.remove('visible')
+  }
 })
 
 lucide.createIcons()
