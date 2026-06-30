@@ -215,11 +215,16 @@ button:hover {
   width: 220px;
   background: var(--fondo-sidebar);
   border-right: 1px solid var(--borde);
-  padding: 16px 0;
+  padding: 16px 0 70px 0;
   transition: width 0.3s;
   overflow: hidden;
   flex-shrink: 0;
   box-shadow: 1px 0 8px rgba(0,0,0,0.04);
+  position: fixed;
+  top: 60px;
+  left: 0;
+  height: calc(100vh - 60px);
+  z-index: 50;
 }
 
 .sidebar.colapsado {
@@ -277,6 +282,12 @@ button:hover {
   flex: 1;
   padding: 30px;
   overflow-y: auto;
+  margin-left: 220px;
+}
+
+.sidebar.colapsado ~ .contenido,
+.app-body:has(.sidebar.colapsado) .contenido {
+  margin-left: 60px;
 }
 
 .seccion-titulo {
@@ -526,8 +537,11 @@ select:focus {
   border-radius: 16px;
   width: 100%;
   max-width: 460px;
+  max-height: 90vh;
   border: 1px solid var(--borde);
   box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -563,6 +577,7 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
 }
 
 .campo {
@@ -799,6 +814,10 @@ select:focus {
     align-items: center;
     gap: 6px;
   }
+
+  .contenido {
+  margin-left: 0 !important;
+}
 }
 
 .ventas-izq {
@@ -913,4 +932,156 @@ select:focus {
 
 .card-valor-rojo {
   color: #dc2626;
+}
+
+/* ── SIDEBAR FOOTER / PERFIL ── */
+.sidebar-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--borde);
+  padding: 12px 0;
+  background: var(--fondo-sidebar);
+}
+
+.sidebar {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-menu {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-perfil {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.sidebar-perfil:hover {
+  background: var(--verde-suave);
+}
+
+.avatar-circulo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--verde);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.sidebar-perfil-nombre {
+  flex: 1;
+  font-size: 14px;
+  color: var(--texto);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icono-ajustes {
+  width: 18px;
+  height: 18px;
+  color: var(--texto-suave);
+  flex-shrink: 0;
+}
+
+.sidebar.colapsado .sidebar-perfil {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+/* ── TOGGLE TEMA ── */
+.sidebar-tema {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 20px;
+}
+
+.icono-tema {
+  width: 16px;
+  height: 16px;
+  color: var(--texto-suave);
+  flex-shrink: 0;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--borde);
+  border-radius: 20px;
+  transition: 0.2s;
+}
+
+.switch-slider::before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.switch input:checked + .switch-slider {
+  background: var(--verde);
+}
+
+.switch input:checked + .switch-slider::before {
+  transform: translateX(18px);
+}
+
+.sidebar.colapsado .sidebar-tema {
+  flex-direction: column;
+  padding: 10px 0;
+  gap: 6px;
+}
+
+.sidebar.colapsado .icono-tema:first-child {
+  display: none;
+}
+
+/* ── MODO OSCURO ── */
+body.modo-oscuro {
+  --fondo: #0a0a0a;
+  --fondo-card: #161616;
+  --fondo-sidebar: #161616;
+  --fondo-nav: #161616;
+  --texto: #f0f0f0;
+  --texto-suave: #9ca3af;
+  --borde: #2a2a2a;
+  --verde-suave: #15301f;
 }
