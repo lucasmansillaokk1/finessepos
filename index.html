@@ -37,9 +37,9 @@
         <button class="hamburger" id="btn-hamburger">
           <i data-lucide="menu"></i>
         </button>
-        <span class="nav-logo">
-          <i data-lucide="zap"></i> FINESSE
-        </span>
+        <span class="nav-logo" id="btn-ir-dashboard" style="cursor:pointer">
+  <i data-lucide="zap"></i> FINESSE
+</span>
       </div>
       <div class="navbar-right">
         <span class="nav-negocio" id="nav-email"></span>
@@ -77,6 +77,22 @@
             <span class="menu-texto">Caja</span>
           </li>
         </ul>
+        <div class="sidebar-footer">
+  <div class="sidebar-perfil" id="btn-abrir-ajustes">
+    <div class="avatar-circulo" id="avatar-iniciales">N</div>
+    <span class="sidebar-perfil-nombre menu-texto" id="sidebar-nombre-negocio">Negocio</span>
+    <i data-lucide="settings" class="icono-ajustes menu-texto"></i>
+  </div>
+
+  <div class="sidebar-tema">
+    <i data-lucide="sun" class="icono-tema"></i>
+    <label class="switch">
+      <input type="checkbox" id="toggle-tema" />
+      <span class="switch-slider"></span>
+    </label>
+    <i data-lucide="moon" class="icono-tema"></i>
+  </div>
+</div>
       </aside>
 
       <!-- CONTENIDO PRINCIPAL -->
@@ -152,10 +168,14 @@
     <label>Nombre</label>
     <input type="text" id="producto-nombre" placeholder="Ej: Remera básica" />
   </div>
-  <div class="campo">
-    <label>Precio</label>
-    <input type="number" id="producto-precio" placeholder="Ej: 5000" />
-  </div>
+<div class="campo">
+  <label>Costo <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+  <input type="number" id="producto-costo" placeholder="Ej: 3000" />
+</div>
+<div class="campo">
+  <label>Precio de venta</label>
+  <input type="number" id="producto-precio" placeholder="Ej: 5000" />
+</div>
   <div class="campo">
     <label>Stock</label>
     <input type="number" id="producto-stock" placeholder="Ej: 10" />
@@ -364,6 +384,32 @@
   </div>
 
 </div>
+
+<div id="seccion-ajustes" style="display:none">
+          <h2 class="seccion-titulo">Ajustes del negocio</h2>
+
+          <div class="panel-cobro" style="max-width:420px">
+            <div class="campo">
+              <label>Nombre del negocio</label>
+              <input type="text" id="ajustes-nombre" />
+            </div>
+            <div class="campo">
+              <label>Rubro</label>
+              <select id="ajustes-rubro">
+                <option value="ropa">Ropa y accesorios</option>
+                <option value="ferreteria">Ferretería</option>
+                <option value="kiosco">Kiosco</option>
+                <option value="mates">Mates y derivados</option>
+                <option value="emprendimiento">Emprendimiento</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <button class="btn-verde" id="btn-guardar-ajustes" style="justify-content:center">
+              <i data-lucide="check"></i> Guardar cambios
+            </button>
+            <p id="ajustes-mensaje" style="font-size:13px; text-align:center; min-height:18px"></p>
+          </div>
+        </div>
 
       </main>
     </div>
