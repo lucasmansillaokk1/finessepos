@@ -5,28 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>FINESSE - Sistema POS</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
 
   <!-- PANTALLA LOGIN -->
-  <div id="pantalla-login">
-    <div class="login-box">
-      <div class="login-logo">
-        <i data-lucide="zap" class="logo-icon"></i>
-        <h1>FINESSE POS</h1>
-      </div>
-      <p class="login-subtitle">Gestioná tu negocio desde cualquier lugar.</p>
-
-      <input type="email" id="email" placeholder="Email" />
-      <input type="password" id="password" placeholder="Contraseña" />
-
-      <button id="btn-login">Iniciar sesión</button>
-      <button id="btn-registro">Crear cuenta nueva</button>
-
-      <p id="mensaje-error"></p>
+<div id="pantalla-login">
+  <div class="login-box">
+    <div class="login-logo">
+      <i data-lucide="zap" class="logo-icon"></i>
+      <h1>FINESSE POS</h1>
     </div>
+    <p class="login-subtitle">Gestioná tu negocio desde cualquier lugar.</p>
+
+    <input type="email" id="email" placeholder="Email" autocomplete="email" />
+    <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password" />
+
+    <button id="btn-login">Iniciar sesión</button>
+    <button id="btn-registro">Crear cuenta nueva</button>
+
+    <p id="mensaje-error"></p>
   </div>
+</div>
+
+<!-- PANTALLA REGISTRO -->
+<div id="pantalla-registro" style="display:none">
+  <div class="login-box">
+    <div class="login-logo">
+      <i data-lucide="store" class="logo-icon"></i>
+      <h1>Crear cuenta</h1>
+    </div>
+    <p class="login-subtitle">Completá los datos para empezar a usar Finesse POS.</p>
+
+    <input type="text" id="registro-nombre" placeholder="Nombre del negocio" />
+    
+    <select id="registro-rubro">
+      <option value="">Seleccioná el rubro</option>
+      <option value="ropa">Ropa y accesorios</option>
+      <option value="ferreteria">Ferretería</option>
+      <option value="kiosco">Kiosco</option>
+      <option value="mates">Mates y derivados</option>
+      <option value="emprendimiento">Emprendimiento</option>
+      <option value="otro">Otro</option>
+    </select>
+
+    <input type="email" id="registro-email" placeholder="Email" autocomplete="email" />
+    <input type="password" id="registro-password" placeholder="Contraseña" autocomplete="new-password" />
+    <input type="password" id="registro-password-confirmar" placeholder="Confirmar contraseña" autocomplete="new-password" />
+
+    <button id="btn-confirmar-registro">Crear cuenta</button>
+    <button id="btn-volver-login" style="background:none; color:var(--texto-suave); border:none; font-size:14px; cursor:pointer; padding:4px">
+      ← Volver al inicio de sesión
+    </button>
+
+    <p id="mensaje-error-registro"></p>
+  </div>
+</div>
 
   <!-- PANTALLA APP -->
   <div id="pantalla-app" style="display:none">
@@ -76,13 +114,20 @@
             <i data-lucide="wallet" class="menu-icon"></i>
             <span class="menu-texto">Caja</span>
           </li>
+          <li class="menu-item" data-seccion="reportes">
+  <i data-lucide="bar-chart-2" class="menu-icon"></i>
+  <span class="menu-texto">Reportes</span>
+</li>
         </ul>
         <div class="sidebar-footer">
   <div class="sidebar-perfil" id="btn-abrir-ajustes">
-    <div class="avatar-circulo" id="avatar-iniciales">N</div>
-    <span class="sidebar-perfil-nombre menu-texto" id="sidebar-nombre-negocio">Negocio</span>
-    <i data-lucide="settings" class="icono-ajustes menu-texto"></i>
+  <div class="avatar-circulo" id="avatar-iniciales">N</div>
+  <div style="flex:1; overflow:hidden" class="menu-texto">
+    <div class="sidebar-perfil-nombre" id="sidebar-nombre-negocio">Negocio</div>
+    <span id="badge-plan" style="font-size:10px; padding:2px 6px; border-radius:4px; color:#fff; font-weight:700">FREE</span>
   </div>
+  <i data-lucide="settings" class="icono-ajustes menu-texto"></i>
+</div>
 
   <div class="sidebar-tema">
     <i data-lucide="sun" class="icono-tema"></i>
@@ -99,38 +144,124 @@
       <main class="contenido" id="contenido">
 
         <div id="seccion-dashboard">
-          <h2 class="seccion-titulo">Dashboard</h2>
-          <div class="cards-grid">
-            <div class="card">
-              <i data-lucide="trending-up" class="card-icon"></i>
-              <span class="card-label">Ventas del día</span>
-              <span class="card-valor">$0</span>
-            </div>
-            <div class="card">
-              <i data-lucide="calendar" class="card-icon"></i>
-              <span class="card-label">Ventas del mes</span>
-              <span class="card-valor">$0</span>
-            </div>
-            <div class="card">
-              <i data-lucide="package" class="card-icon"></i>
-              <span class="card-label">Productos</span>
-              <span class="card-valor">0</span>
-            </div>
-            <div class="card">
-              <i data-lucide="receipt" class="card-icon"></i>
-              <span class="card-label">Ticket promedio</span>
-              <span class="card-valor">$0</span>
-            </div>
-          </div>
+  <h2 class="seccion-titulo">Dashboard</h2>
+  <div class="cards-grid">
+    <div class="card">
+      <i data-lucide="trending-up" class="card-icon"></i>
+      <span class="card-label">Ventas del día</span>
+      <span class="card-valor">$0</span>
+    </div>
+    <div class="card">
+      <i data-lucide="calendar" class="card-icon"></i>
+      <span class="card-label">Ventas del mes</span>
+      <span class="card-valor">$0</span>
+    </div>
+    <div class="card">
+      <i data-lucide="package" class="card-icon"></i>
+      <span class="card-label">Productos</span>
+      <span class="card-valor">0</span>
+    </div>
+    <div class="card">
+      <i data-lucide="receipt" class="card-icon"></i>
+      <span class="card-label">Ticket promedio</span>
+      <span class="card-valor">$0</span>
+    </div>
+  </div>
+
+  <!-- COMPARATIVA SEMANAS -->
+<div class="comparativa-wrapper">
+  <h3 class="grafico-titulo" style="margin-bottom:16px">Esta semana vs semana anterior</h3>
+  <div class="comparativa-grid">
+    <div class="comparativa-card">
+      <span class="comparativa-label">Total ventas</span>
+      <div class="comparativa-valores">
+        <div>
+          <div class="comparativa-semana-label">Esta semana</div>
+          <div class="comparativa-valor" id="comp-total-actual">$0</div>
         </div>
+        <div id="comp-total-flecha" class="comparativa-flecha"></div>
+        <div>
+          <div class="comparativa-semana-label">Semana anterior</div>
+          <div class="comparativa-valor-anterior" id="comp-total-anterior">$0</div>
+        </div>
+      </div>
+      <div id="comp-total-diff" class="comparativa-diff"></div>
+    </div>
+    <div class="comparativa-card">
+      <span class="comparativa-label">Transacciones</span>
+      <div class="comparativa-valores">
+        <div>
+          <div class="comparativa-semana-label">Esta semana</div>
+          <div class="comparativa-valor" id="comp-trans-actual">0</div>
+        </div>
+        <div id="comp-trans-flecha" class="comparativa-flecha"></div>
+        <div>
+          <div class="comparativa-semana-label">Semana anterior</div>
+          <div class="comparativa-valor-anterior" id="comp-trans-anterior">0</div>
+        </div>
+      </div>
+      <div id="comp-trans-diff" class="comparativa-diff"></div>
+    </div>
+    <div class="comparativa-card">
+      <span class="comparativa-label">Ticket promedio</span>
+      <div class="comparativa-valores">
+        <div>
+          <div class="comparativa-semana-label">Esta semana</div>
+          <div class="comparativa-valor" id="comp-ticket-actual">$0</div>
+        </div>
+        <div id="comp-ticket-flecha" class="comparativa-flecha"></div>
+        <div>
+          <div class="comparativa-semana-label">Semana anterior</div>
+          <div class="comparativa-valor-anterior" id="comp-ticket-anterior">$0</div>
+        </div>
+      </div>
+      <div id="comp-ticket-diff" class="comparativa-diff"></div>
+    </div>
+  </div>
+</div>
+
+  <!-- GRAFICOS -->
+  <div class="dashboard-graficos">
+    <div class="grafico-card">
+      <h3 class="grafico-titulo">Ventas últimos 7 días</h3>
+      <canvas id="grafico-ventas"></canvas>
+    </div>
+    <div class="grafico-card">
+      <h3 class="grafico-titulo">Top 5 productos del mes</h3>
+      <div id="top-productos"></div>
+    </div>
+  </div>
+</div>
 
         <div id="seccion-productos" style="display:none">
   <div class="seccion-header">
-    <h2 class="seccion-titulo">Productos</h2>
+  <h2 class="seccion-titulo">Productos</h2>
+  <div style="display:flex; gap:8px">
+    <button class="btn-gris" id="btn-descargar-plantilla" style="display:flex; align-items:center; gap:6px">
+      <i data-lucide="download" style="width:15px;height:15px"></i> Plantilla
+    </button>
+    <button class="btn-gris" id="btn-abrir-importar" style="display:flex; align-items:center; gap:6px">
+      <i data-lucide="upload" style="width:15px;height:15px"></i> Importar
+    </button>
     <button class="btn-verde" id="btn-nuevo-producto">
       <i data-lucide="plus"></i> Nuevo producto
     </button>
   </div>
+</div>
+
+<div class="buscador-productos">
+  <i data-lucide="search" style="width:16px;height:16px;color:var(--texto-suave)"></i>
+  <input type="text" id="buscador-productos" placeholder="Buscar por nombre o código..." />
+</div>
+
+<!-- PILLS DE CATEGORÍAS -->
+<div id="categorias-pills" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px"></div>
+
+<!-- ALERTA STOCK BAJO -->
+<div class="alerta-stock" id="alerta-stock" style="display:none">
+  <i data-lucide="alert-triangle" style="width:18px; height:18px"></i>
+  <span id="alerta-stock-texto"></span>
+</div>
 
   <!-- TABLA -->
   <div class="tabla-wrapper">
@@ -139,7 +270,14 @@
   <tr>
     <th>Código / PLU</th>
     <th>Nombre</th>
-    <th>Precio</th>
+    <th>Costo / Ganancia
+  <button id="btn-toggle-pin" style="background:none; border:none; cursor:pointer; color:var(--texto-suave); vertical-align:middle; padding:0 4px">
+    <i data-lucide="lock" style="width:13px;height:13px"></i>
+  </button>
+</th>
+    <th>P. Menor</th>
+    <th>P. Mayor</th>
+    <th>P. Revendedor</th>
     <th>Stock</th>
     <th>Categoría</th>
     <th>Acciones</th>
@@ -169,12 +307,20 @@
     <input type="text" id="producto-nombre" placeholder="Ej: Remera básica" />
   </div>
 <div class="campo">
-  <label>Costo <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+  <label>Costo <span style="color:var(--texto-suave); font-weight:400"></span></label>
   <input type="number" id="producto-costo" placeholder="Ej: 3000" />
 </div>
 <div class="campo">
-  <label>Precio de venta</label>
-  <input type="number" id="producto-precio" placeholder="Ej: 5000" />
+  <label>Precio Minorista</label>
+  <input type="number" id="producto-precio" placeholder="Ej: 7500" />
+</div>
+<div class="campo">
+  <label>Precio Mayorista <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+  <input type="number" id="producto-precio-mayor" placeholder="Ej: 6000" />
+</div>
+<div class="campo">
+  <label>Precio Revendedor <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+  <input type="number" id="producto-precio-revendedor" placeholder="Ej: 5300" />
 </div>
   <div class="campo">
     <label>Stock</label>
@@ -211,6 +357,11 @@
         <input type="text" id="venta-buscar" placeholder="Escribí o escaneá el código..." />
       </div>
 
+      <div class="campo" style="margin-top:12px">
+  <label>Nombre del cliente <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+  <input type="text" id="venta-cliente" placeholder="Ej: Juan García" />
+</div>
+
       <!-- RESULTADOS BUSQUEDA -->
       <div id="venta-resultados" class="resultados-lista"></div>
 
@@ -244,11 +395,27 @@
     <div class="ventas-der">
       <div class="panel-cobro">
         <h3>Resumen</h3>
-
+<p id="resumen-tipo-precio" style="font-size:13px; font-weight:600; text-align:center"></p>
         <div class="resumen-linea">
-          <span>Total</span>
-          <span class="resumen-total" id="venta-total">$0</span>
-        </div>
+  <span>Subtotal</span>
+  <span id="venta-subtotal">$0</span>
+</div>
+
+<div class="campo">
+  <label>Descuento</label>
+  <div style="display:flex; gap:8px; align-items:center">
+    <input type="number" id="descuento-valor" placeholder="0" min="0" style="flex:1" />
+    <select id="descuento-tipo" style="width:70px">
+      <option value="porcentaje">%</option>
+      <option value="monto">$</option>
+    </select>
+  </div>
+</div>
+
+<div class="resumen-linea">
+  <span>Total</span>
+  <span class="resumen-total" id="venta-total">$0</span>
+</div>
 
         <div class="campo">
           <label>Método de pago</label>
@@ -282,17 +449,65 @@
 </div>
 
         <div id="seccion-historial" style="display:none">
-  <h2 class="seccion-titulo">Historial de ventas</h2>
+  <div class="seccion-header">
+    <h2 class="seccion-titulo">Historial de ventas</h2>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filtros-bar">
+  <div class="campo" style="flex:1; min-width:140px">
+    <label>Desde</label>
+    <input type="date" id="filtro-desde" />
+  </div>
+  <div class="campo" style="flex:1; min-width:140px">
+    <label>Hasta</label>
+    <input type="date" id="filtro-hasta" />
+  </div>
+  <div class="campo" style="flex:1; min-width:140px">
+    <label>Método de pago</label>
+    <select id="filtro-metodo">
+      <option value="">Todos</option>
+      <option value="efectivo">Efectivo</option>
+      <option value="debito">Débito</option>
+      <option value="credito">Crédito</option>
+      <option value="transferencia">Transferencia</option>
+    </select>
+  </div>
+  <div class="campo" style="flex:2; min-width:200px">
+  <label>Buscar por cliente o N° de ticket</label>
+  <input type="text" id="filtro-buscar" placeholder="Ej: Juan García o #15" />
+</div>
+  <div class="campo" style="justify-content:flex-end">
+    <label>&nbsp;</label>
+    <div style="display:flex; gap:8px">
+      <button class="btn-verde" id="btn-filtrar" style="align-items:center">
+        <i data-lucide="search" style="width:15px; height:15px"></i> Filtrar
+      </button>
+      <button class="btn-gris" id="btn-limpiar-filtros" style="align-items:center">
+        <i data-lucide="x" style="width:15px; height:15px"></i> Limpiar
+      </button>
+    </div>
+  </div>
+</div>
+
+  <!-- RESUMEN FILTRADO -->
+  <div class="filtros-resumen" id="filtros-resumen" style="display:none">
+    <span>Mostrando <strong id="filtros-cantidad">0</strong> ventas</span>
+    <span>Total: <strong id="filtros-total" style="color:var(--verde)">$0</strong></span>
+  </div>
 
   <div class="tabla-wrapper">
     <table class="tabla">
       <thead>
         <tr>
-          <th></th>
-          <th>Fecha</th>
-          <th>Método de pago</th>
-          <th>Total</th>
-        </tr>
+  <th></th>
+  <th>Ticket N°</th>
+  <th>Fecha</th>
+  <th>Cliente</th>
+  <th>Método de pago</th>
+  <th>Total</th>
+  <th></th>
+</tr>
       </thead>
       <tbody id="tabla-historial">
         <tr>
@@ -350,13 +565,14 @@
         <div class="tabla-wrapper">
           <table class="tabla">
             <thead>
-              <tr>
-                <th>Hora</th>
-                <th>Tipo</th>
-                <th>Descripción</th>
-                <th>Monto</th>
-              </tr>
-            </thead>
+  <tr>
+    <th>Hora</th>
+    <th>Tipo</th>
+    <th>Categoría</th>
+    <th>Descripción</th>
+    <th>Monto</th>
+  </tr>
+</thead>
             <tbody id="tabla-movimientos">
               <tr><td colspan="4" class="tabla-vacia">Sin movimientos</td></tr>
             </tbody>
@@ -366,50 +582,331 @@
 
       <div class="ventas-der">
         <div class="panel-cobro">
-          <h3>Registrar egreso</h3>
-          <div class="campo">
-            <label>Monto</label>
-            <input type="number" id="egreso-monto" placeholder="Ej: 2000" />
-          </div>
-          <div class="campo">
-            <label>Descripción</label>
-            <input type="text" id="egreso-descripcion" placeholder="Ej: Compra de bolsas" />
-          </div>
-          <button class="btn-gris" id="btn-registrar-egreso" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px">
-  <i data-lucide="minus-circle" style="width:16px; height:16px"></i> Registrar egreso
-</button>
-        </div>
+  <h3>Registrar egreso</h3>
+  <div class="campo">
+    <label>Categoría</label>
+    <select id="egreso-categoria">
+      <option value="insumos">Insumos / Mercadería</option>
+      <option value="servicios">Servicios (luz, agua, internet)</option>
+      <option value="alquiler">Alquiler</option>
+      <option value="personal">Personal / Sueldos</option>
+      <option value="publicidad">Publicidad</option>
+      <option value="transporte">Transporte / Envíos</option>
+      <option value="mantenimiento">Mantenimiento</option>
+      <option value="otros">Otros</option>
+    </select>
+  </div>
+  <div class="campo">
+    <label>Monto</label>
+    <input type="number" id="egreso-monto" placeholder="Ej: 2000" />
+  </div>
+  <div class="campo">
+    <label>Descripción <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+    <input type="text" id="egreso-descripcion" placeholder="Ej: Compra de bolsas" />
+  </div>
+  <button class="btn-gris" id="btn-registrar-egreso" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px">
+    <i data-lucide="minus-circle" style="width:16px; height:16px"></i> Registrar egreso
+  </button>
+</div>
       </div>
+    </div>
+    <!-- CIERRE DE CAJA -->
+<div class="panel-cobro" style="margin-top:20px" id="panel-cierre-caja">
+  <h3>Cerrar caja</h3>
+  <p style="font-size:13px; color:var(--texto-suave)">Contá el efectivo que tenés en mano e ingresalo para cerrar la caja del día.</p>
+
+  <div class="campo">
+    <label>Efectivo real contado</label>
+    <input type="number" id="cierre-efectivo-real" placeholder="Ej: 15000" />
+  </div>
+
+  <div class="cierre-comparacion" id="cierre-comparacion" style="display:none">
+    <div class="cierre-fila">
+      <span>Saldo esperado</span>
+      <span id="cierre-esperado" style="font-weight:600">$0</span>
+    </div>
+    <div class="cierre-fila">
+      <span>Efectivo real</span>
+      <span id="cierre-real" style="font-weight:600">$0</span>
+    </div>
+    <div class="cierre-fila cierre-diferencia-fila">
+      <span>Diferencia</span>
+      <span id="cierre-diferencia" style="font-weight:bold; font-size:16px">$0</span>
+    </div>
+  </div>
+
+  <button class="btn-rojo" id="btn-cerrar-caja" style="width:100%; padding:12px; font-size:14px; margin-top:8px; justify-content:center; display:flex; align-items:center; gap:6px">
+    <i data-lucide="lock" style="width:16px;height:16px"></i> Cerrar caja del día
+  </button>
+</div>
+  </div>
+
+  <!-- ESTADO: CAJA CERRADA -->
+<div id="caja-cerrada" style="display:none">
+  <div class="panel-cobro" style="max-width:500px">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px">
+      <i data-lucide="lock" style="width:24px; height:24px; color:#dc2626"></i>
+      <h3 style="color:#dc2626">Caja cerrada</h3>
+    </div>
+    <p style="font-size:13px; color:var(--texto-suave); margin-bottom:16px">La caja de hoy ya fue cerrada. Podés abrirla nuevamente mañana.</p>
+    <div class="cierre-comparacion" style="display:flex">
+      <p style="font-size:13px; color:var(--texto)" id="cierre-resumen-texto"></p>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div id="seccion-reportes" style="display:none">
+  <h2 class="seccion-titulo">Reportes</h2>
+
+  <!-- FILTRO DE PERÍODO -->
+  <div class="filtros-bar" style="margin-bottom:24px">
+    <div class="campo" style="flex:1; min-width:140px">
+      <label>Desde</label>
+      <input type="date" id="reporte-desde" />
+    </div>
+    <div class="campo" style="flex:1; min-width:140px">
+      <label>Hasta</label>
+      <input type="date" id="reporte-hasta" />
+    </div>
+    <div class="campo">
+      <label>&nbsp;</label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn-gris" id="reporte-hoy">Hoy</button>
+        <button class="btn-gris" id="reporte-semana">Esta semana</button>
+        <button class="btn-gris" id="reporte-mes">Este mes</button>
+        <button class="btn-verde" id="btn-generar-reporte">
+          <i data-lucide="bar-chart-2" style="width:15px;height:15px"></i> Generar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTADO -->
+  <div id="reporte-resultado" style="display:none">
+
+    <div style="display:flex; justify-content:flex-end; margin-bottom:16px">
+  <button class="btn-verde" id="btn-descargar-reporte-pdf" style="justify-content:center; display:flex; align-items:center; gap:6px">
+    <i data-lucide="file-down" style="width:15px;height:15px"></i> Descargar PDF
+  </button>
+</div>
+
+    <!-- CARDS RESUMEN -->
+    <div class="cards-grid" style="margin-bottom:24px">
+      <div class="card">
+        <i data-lucide="trending-up" class="card-icon"></i>
+        <span class="card-label">Total ventas</span>
+        <span class="card-valor" id="reporte-total">$0</span>
+      </div>
+      <div class="card">
+        <i data-lucide="shopping-cart" class="card-icon"></i>
+        <span class="card-label">Transacciones</span>
+        <span class="card-valor" id="reporte-transacciones">0</span>
+      </div>
+      <div class="card">
+        <i data-lucide="receipt" class="card-icon"></i>
+        <span class="card-label">Ticket promedio</span>
+        <span class="card-valor" id="reporte-ticket">$0</span>
+      </div>
+      <div class="card">
+        <i data-lucide="piggy-bank" class="card-icon"></i>
+        <span class="card-label">Ganancia estimada</span>
+        <span class="card-valor" id="reporte-ganancia">$0</span>
+      </div>
+    </div>
+
+    <div class="dashboard-graficos">
+
+      <!-- MÉTODOS DE PAGO -->
+      <div class="grafico-card">
+        <h3 class="grafico-titulo">Ventas por método de pago</h3>
+        <div id="reporte-metodos"></div>
+      </div>
+
+      <!-- TOP PRODUCTOS -->
+      <div class="grafico-card">
+        <h3 class="grafico-titulo">Productos más vendidos</h3>
+        <div id="reporte-top-productos"></div>
+      </div>
+
+      <div class="grafico-card" style="grid-column: 1 / -1">
+  <h3 class="grafico-titulo">Egresos por categoría</h3>
+  <div id="reporte-egresos"></div>
+</div>
+
     </div>
   </div>
 
 </div>
 
-<div id="seccion-ajustes" style="display:none">
-          <h2 class="seccion-titulo">Ajustes del negocio</h2>
+<!-- SECCIÓN AJUSTES -->
 
-          <div class="panel-cobro" style="max-width:420px">
-            <div class="campo">
-              <label>Nombre del negocio</label>
-              <input type="text" id="ajustes-nombre" />
-            </div>
-            <div class="campo">
-              <label>Rubro</label>
-              <select id="ajustes-rubro">
-                <option value="ropa">Ropa y accesorios</option>
-                <option value="ferreteria">Ferretería</option>
-                <option value="kiosco">Kiosco</option>
-                <option value="mates">Mates y derivados</option>
-                <option value="emprendimiento">Emprendimiento</option>
-                <option value="otro">Otro</option>
-              </select>
-            </div>
-            <button class="btn-verde" id="btn-guardar-ajustes" style="justify-content:center">
-              <i data-lucide="check"></i> Guardar cambios
-            </button>
-            <p id="ajustes-mensaje" style="font-size:13px; text-align:center; min-height:18px"></p>
-          </div>
-        </div>
+<div id="seccion-ajustes" style="display:none">
+  <h2 class="seccion-titulo">Ajustes</h2>
+
+  <div class="ajustes-grid">
+
+    <!-- CARD 1: INFORMACIÓN DEL NEGOCIO -->
+    <div class="ajuste-card">
+      <h3 class="ajuste-card-titulo">
+        <i data-lucide="store" style="width:18px;height:18px"></i>
+        Información del negocio
+      </h3>
+      <div class="campo">
+        <label>Nombre del negocio</label>
+        <input type="text" id="ajustes-nombre" />
+      </div>
+      <div class="campo">
+        <label>Rubro</label>
+        <select id="ajustes-rubro">
+          <option value="ropa">Ropa y accesorios</option>
+          <option value="ferreteria">Ferretería</option>
+          <option value="kiosco">Kiosco</option>
+          <option value="mates">Mates y derivados</option>
+          <option value="emprendimiento">Emprendimiento</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Instagram <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+        <input type="text" id="ajustes-instagram" placeholder="Ej: @mitienda" />
+      </div>
+      <button class="btn-verde" id="btn-guardar-info-negocio" style="justify-content:center; margin-top:8px">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
+      </button>
+      <p id="ajustes-mensaje-info" style="font-size:13px; text-align:center; min-height:18px"></p>
+    </div>
+
+    <!-- CARD 2: CONTACTO -->
+<div class="ajuste-card">
+  <h3 class="ajuste-card-titulo">
+    <i data-lucide="map-pin" style="width:18px;height:18px"></i>
+    Contacto y ubicación
+  </h3>
+  <div class="campo">
+    <label>Dirección <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+    <input type="text" id="ajustes-direccion" placeholder="Ej: Av. Siempreviva 742, Tucumán" />
+  </div>
+  <div class="campo">
+    <label>Teléfono <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+    <input type="text" id="ajustes-telefono" placeholder="Ej: +54 381 123-4567" />
+  </div>
+  <button class="btn-verde" id="btn-guardar-contacto" style="justify-content:center; margin-top:8px">
+    <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
+  </button>
+  <p id="ajustes-mensaje-contacto" style="font-size:13px; text-align:center; min-height:18px"></p>
+</div>
+
+    <!-- CARD 4: LOGO -->
+<div class="ajuste-card">
+  <h3 class="ajuste-card-titulo">
+    <i data-lucide="image" style="width:18px;height:18px"></i>
+    Logo del negocio
+  </h3>
+  <div class="logo-preview-wrapper">
+    <img id="logo-preview" src="" alt="Logo" style="display:none; width:100px; height:100px; object-fit:cover; border-radius:12px; border:1px solid var(--borde)" />
+    <div id="logo-placeholder" class="logo-placeholder">
+      <i data-lucide="image" style="width:32px;height:32px;color:var(--texto-suave)"></i>
+      <p style="font-size:13px;color:var(--texto-suave);margin-top:8px">Sin logo cargado</p>
+    </div>
+  </div>
+  <div class="importar-zona" id="logo-zona" style="padding:16px">
+    <i data-lucide="upload-cloud" style="width:28px;height:28px;color:var(--texto-suave)"></i>
+    <p style="font-size:13px;color:var(--texto-suave);margin-top:6px">Hacé clic para subir tu logo</p>
+    <input type="file" id="logo-archivo" accept="image/*" style="display:none" />
+  </div>
+  <button class="btn-verde" id="btn-guardar-logo" style="justify-content:center; display:none">
+    <i data-lucide="check" style="width:15px;height:15px"></i> Guardar logo
+  </button>
+  <p id="ajustes-mensaje-logo" style="font-size:13px; text-align:center; min-height:18px"></p>
+</div>
+
+    <!-- CARD 5: SEGURIDAD -->
+
+<div class="ajuste-card">
+  <h3 class="ajuste-card-titulo">
+    <i data-lucide="lock" style="width:18px;height:18px"></i>
+    Seguridad
+  </h3>
+
+  <!-- EMAIL -->
+  <div style="display:flex; gap:8px; align-items:flex-end">
+    <div class="campo">
+  <label>Email de la cuenta</label>
+  <div style="display:grid; grid-template-columns: 1fr auto; gap:30px; align-items:center">
+    <input type="email" id="ajustes-email" placeholder="nuevo@email.com" />
+    <button class="btn-verde" id="btn-guardar-email" style="padding:10px 14px; display:flex; align-items:center; justify-content:center">
+      <i data-lucide="send" style="width:20px;height:20px"></i>
+    </button>
+  </div>
+  <p style="font-size:12px; color:var(--texto-suave); margin-top:4px">Al cambiarlo te llega un email de confirmación.</p>
+</div>
+<p id="ajustes-mensaje-email" style="font-size:13px; text-align:center; min-height:18px"></p>
+  </div>
+  <p id="ajustes-mensaje-email" style="font-size:13px; text-align:center; min-height:18px; margin-top:-10px"></p>
+
+  <!-- PIN -->
+  <div class="campo">
+    <label>PIN de seguridad (4 dígitos) <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+    <input type="password" id="ajustes-pin" placeholder="Ej: 1234" maxlength="4" />
+    <p style="font-size:12px; color:var(--texto-suave); margin-top:4px">Bloqueá info sensible de empleados con este PIN.</p>
+  </div>
+
+  <!-- CONTRASEÑA -->
+  <div class="campo">
+    <label>Nueva contraseña</label>
+    <input type="password" id="ajustes-password-nueva" placeholder="Mínimo 6 caracteres" />
+  </div>
+  <div class="campo">
+    <label>Confirmar nueva contraseña</label>
+    <input type="password" id="ajustes-password-confirmar" placeholder="Repetí la contraseña" />
+  </div>
+
+  <div style="display:flex; gap:8px; margin-top:8px">
+    <button class="btn-gris" id="btn-guardar-pin" style="flex:1; justify-content:center; display:flex; align-items:center; gap:6px">
+      <i data-lucide="lock" style="width:15px;height:15px"></i> Guardar PIN
+    </button>
+    <button class="btn-verde" id="btn-guardar-password" style="flex:1; justify-content:center">
+      <i data-lucide="check" style="width:15px;height:15px"></i> Cambiar contraseña
+    </button>
+  </div>
+  <p id="ajustes-mensaje-password" style="font-size:13px; text-align:center; min-height:18px"></p>
+</div>
+
+    <!-- CARD 6: CONFIGURACIÓN DE PRECIOS -->
+    <div class="ajuste-card">
+      <h3 class="ajuste-card-titulo">
+        <i data-lucide="tag" style="width:18px;height:18px"></i>
+        Configuración de precios
+      </h3>
+      <div class="campo">
+        <label>Precio mayorista a partir de (unidades)</label>
+        <input type="number" id="ajustes-umbral-mayor" placeholder="Ej: 3" min="1" />
+      </div>
+      <div class="campo">
+        <label>Precio revendedor a partir de (unidades)</label>
+        <input type="number" id="ajustes-umbral-revendedor" placeholder="Ej: 5" min="1" />
+      </div>
+      <div class="campo">
+  <label>Alerta de stock bajo a partir de (unidades)</label>
+  <div style="display:flex; align-items:center; gap:12px">
+    <input type="number" id="ajustes-umbral-stock" placeholder="Ej: 5" min="1" style="flex:1" />
+    <label class="switch" style="flex-shrink:0">
+      <input type="checkbox" id="ajustes-alertas-stock" />
+      <span class="switch-slider"></span>
+    </label>
+  </div>
+  <p style="font-size:12px; color:var(--texto-suave); margin-top:4px">Activá o desactivá las alertas de stock bajo.</p>
+</div>
+      <button class="btn-verde" id="btn-guardar-precios" style="justify-content:center; margin-top:8px">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
+      </button>
+      <p id="ajustes-mensaje-precios" style="font-size:13px; text-align:center; min-height:18px"></p>
+    </div>
+
+  </div>
+</div>
 
       </main>
     </div>
@@ -440,6 +937,260 @@
     <p id="config-error" style="color:#ff6b6b; font-size:13px; text-align:center; min-height:20px"></p>
   </div>
 </div>
+
+<div class="toast" id="toast"></div>
+
+<!-- MODAL CONFIRMAR ELIMINAR VENTA -->
+<div class="modal-overlay" id="modal-eliminar-venta" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>Eliminar venta</h3>
+      <button class="btn-cerrar" id="btn-cerrar-modal-eliminar">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px; color:var(--texto-suave)">¿Estás seguro que querés eliminar esta venta? Esta acción no se puede deshacer y va a afectar los reportes del dashboard.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-eliminar">Cancelar</button>
+      <button class="btn-rojo" id="btn-confirmar-eliminar" style="padding:10px 18px; font-size:14px">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TICKET -->
+<div class="modal-overlay" id="modal-ticket" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>Comprobante de venta</h3>
+      <button class="btn-cerrar" id="btn-cerrar-ticket">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body" id="ticket-contenido">
+      <!-- se genera dinámicamente -->
+    </div>
+    <div class="modal-footer">
+  <button class="btn-gris" id="btn-cerrar-ticket-2">Cerrar</button>
+  <button class="btn-gris" id="btn-descargar-pdf" style="justify-content:center; display:flex; align-items:center; gap:6px">
+    <i data-lucide="file-down" style="width:15px;height:15px"></i> PDF
+  </button>
+  <button class="btn-verde" id="btn-imprimir-ticket" style="justify-content:center">
+    <i data-lucide="printer" style="width:16px;height:16px"></i> Imprimir
+  </button>
+</div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR PRODUCTOS -->
+<div class="modal-overlay" id="modal-importar" style="display:none">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h3>Importar productos desde CSV</h3>
+      <button class="btn-cerrar" id="btn-cerrar-importar">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="importar-instrucciones">
+        <i data-lucide="info" style="width:18px;height:18px;color:var(--verde);flex-shrink:0"></i>
+        <p>Descargá la plantilla, completá tus productos y subí el archivo. Las columnas tienen que estar en el mismo orden que la plantilla.</p>
+      </div>
+
+      <div class="importar-zona" id="importar-zona">
+        <i data-lucide="upload-cloud" style="width:36px;height:36px;color:var(--texto-suave)"></i>
+        <p style="font-size:14px; color:var(--texto-suave); margin-top:8px">Hacé clic o arrastrá tu archivo CSV acá</p>
+        <input type="file" id="importar-archivo" accept=".csv" style="display:none" />
+      </div>
+
+      <div id="importar-preview" style="display:none">
+        <p style="font-size:13px; font-weight:600; margin-bottom:8px" id="importar-preview-titulo"></p>
+        <div class="tabla-wrapper" style="max-height:200px; overflow-y:auto">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Costo</th>
+                <th>Stock</th>
+                <th>Categoría</th>
+                <th>Código</th>
+              </tr>
+            </thead>
+            <tbody id="importar-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-importar">Cancelar</button>
+      <button class="btn-verde" id="btn-confirmar-importar" style="display:none; justify-content:center; align-items:center; gap:6px">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Importar productos
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AJUSTE STOCK -->
+<div class="modal-overlay" id="modal-stock" style="display:none">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-header">
+      <h3>Ajustar stock</h3>
+      <button class="btn-cerrar" id="btn-cerrar-stock">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px; color:var(--texto-suave)" id="stock-producto-nombre"></p>
+      <div class="stock-actual-box">
+        <span>Stock actual</span>
+        <span id="stock-actual-valor" style="font-size:22px; font-weight:bold; color:var(--verde)">0</span>
+      </div>
+      <div class="campo">
+        <label>Tipo de ajuste</label>
+        <select id="stock-tipo">
+          <option value="sumar">Sumar stock</option>
+          <option value="restar">Restar stock</option>
+          <option value="fijar">Fijar en un valor exacto</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label id="stock-cantidad-label">Cantidad a sumar</label>
+        <input type="number" id="stock-cantidad" placeholder="Ej: 10" min="0" />
+      </div>
+      <div class="stock-preview" id="stock-preview" style="display:none">
+        <span>Stock resultante:</span>
+        <span id="stock-preview-valor" style="font-weight:bold; font-size:16px; color:var(--verde)">0</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-stock">Cancelar</button>
+      <button class="btn-verde" id="btn-guardar-stock" style="justify-content:center">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Aplicar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PIN -->
+<div class="modal-overlay" id="modal-pin" style="display:none">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-header">
+      <h3 style="display:flex; align-items:center; gap:8px">
+        <i data-lucide="lock" style="width:18px;height:18px;color:var(--verde)"></i>
+        PIN de seguridad
+      </h3>
+      <button class="btn-cerrar" id="btn-cerrar-modal-pin">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="text-align:center; gap:16px">
+      <p style="font-size:14px; color:var(--texto-suave)">Ingresá tu PIN para ver información sensible</p>
+      <div class="pin-inputs">
+        <input type="password" class="pin-input" maxlength="1" inputmode="numeric" />
+        <input type="password" class="pin-input" maxlength="1" inputmode="numeric" />
+        <input type="password" class="pin-input" maxlength="1" inputmode="numeric" />
+        <input type="password" class="pin-input" maxlength="1" inputmode="numeric" />
+      </div>
+      <p id="pin-error" style="color:#dc2626; font-size:13px; min-height:18px"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-pin">Cancelar</button>
+      <button class="btn-verde" id="btn-confirmar-pin" style="justify-content:center">
+        <i data-lucide="unlock" style="width:15px;height:15px"></i> Desbloquear
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PREMIUM -->
+<div class="modal-overlay" id="modal-premium" style="display:none">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header" style="background:linear-gradient(135deg, #16a34a, #15803d); border-radius:14px 14px 0 0">
+      <h3 style="color:#fff; display:flex; align-items:center; gap:8px">
+        <i data-lucide="zap" style="width:20px;height:20px"></i>
+        Función Premium
+      </h3>
+      <button class="btn-cerrar" id="btn-cerrar-premium" style="color:#fff">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="text-align:center; gap:20px">
+      <i data-lucide="lock" style="width:48px;height:48px;color:var(--verde);margin:0 auto"></i>
+      <p id="premium-mensaje" style="font-size:14px; color:var(--texto-suave); line-height:1.6"></p>
+      <div style="background:var(--verde-suave); border-radius:10px; padding:16px">
+        <p style="font-size:13px; font-weight:600; color:var(--verde); margin-bottom:8px">Plan Premium incluye:</p>
+        <ul style="font-size:13px; color:var(--texto); text-align:left; padding-left:16px; line-height:2">
+          <li>Productos ilimitados</li>
+          <li>3 precios por producto</li>
+          <li>Precios escalonados automáticos</li>
+          <li>Reportes avanzados con PDF</li>
+          <li>Importador de CSV</li>
+          <li>Caja con cierre formal</li>
+          <li>Historial completo</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn-gris" id="btn-cerrar-premium-2">Ahora no</button>
+      <button class="btn-verde" id="btn-upgrade-premium" style="justify-content:center; gap:6px">
+        <i data-lucide="zap" style="width:15px;height:15px"></i> Quiero Premium
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CÓDIGO DE BARRAS -->
+<div class="modal-overlay" id="modal-barcode" style="display:none">
+  <div style="background:#fff; border-radius:16px; padding:24px; width:100%; max-width:320px; display:flex; flex-direction:column; align-items:center; gap:12px; position:relative">
+    
+    <button id="btn-cerrar-barcode" style="position:absolute; top:12px; right:12px; background:none; border:none; cursor:pointer; font-size:18px; color:#888">✕</button>
+    
+    <h3 id="barcode-producto-nombre" style="font-size:16px; font-weight:bold; color:#1a1a1a; text-align:center"></h3>
+    
+    <div id="barcode-precios" style="display:flex; flex-direction:column; gap:6px; width:100%; align-items:center"></div>
+    
+    <div style="background:#fff; padding:12px; border-radius:8px; border:1px solid #e5e5e5; width:100%; display:flex; justify-content:center">
+  <svg id="barcode-svg"></svg>
+</div>
+    
+    <p id="barcode-codigo-texto" style="font-size:13px; color:#888; margin-top:-4px"></p>
+    
+    <div style="display:flex; gap:10px; width:100%; margin-top:4px">
+      <button id="btn-cerrar-barcode-2" style="flex:1; padding:12px; border-radius:8px; border:1px solid #ddd; background:#fff; font-size:14px; cursor:pointer">Cerrar</button>
+      <button id="btn-imprimir-barcode" style="flex:1; padding:12px; border-radius:8px; border:none; background:#16a34a; color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px">
+        <i data-lucide="printer" style="width:15px;height:15px"></i> Imprimir
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL CERRAR SESIÓN -->
+<div class="modal-overlay" id="modal-cerrar-sesion" style="display:none">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <h3 style="display:flex; align-items:center; gap:8px">
+        <i data-lucide="log-out" style="width:18px;height:18px;color:#dc2626"></i>
+        Cerrar sesión
+      </h3>
+      <button class="btn-cerrar" id="btn-cancelar-cerrar-sesion-x">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px; color:var(--texto-suave); text-align:center">¿Estás seguro que querés cerrar sesión?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-cerrar-sesion">Cancelar</button>
+      <button class="btn-rojo" id="btn-confirmar-cerrar-sesion" style="padding:10px 18px; font-size:14px">Cerrar sesión</button>
+    </div>
+  </div>
+</div>
+
+
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
