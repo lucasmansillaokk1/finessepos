@@ -264,6 +264,10 @@ db.auth.onAuthStateChange(async (event, session) => {
 
     mostrarToast('Email actualizado correctamente!')
   }
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+    usuarioActual = session.user
+    await verificarPerfil()
+  }
 })
 
 // ── PRODUCTOS ──
@@ -1468,7 +1472,17 @@ document.getElementById('btn-guardar-contacto').addEventListener('click', async 
 // ── BOTÓN CANDADO ──
 document.getElementById('btn-toggle-pin').addEventListener('click', () => {
   if (!negocioActual.pin_seguridad) {
-    toggleInfoSensible(!infoDesbloqueada)
+    infoDesbloqueada = !infoDesbloqueada
+    const celdas = document.querySelectorAll('.info-sensible')
+    celdas.forEach(el => {
+      el.style.filter = infoDesbloqueada ? 'none' : 'blur(4px)'
+      el.style.userSelect = infoDesbloqueada ? 'auto' : 'none'
+    })
+    const btn = document.getElementById('btn-toggle-pin')
+    btn.innerHTML = infoDesbloqueada
+      ? '<i data-lucide="unlock" style="width:13px;height:13px"></i>'
+      : '<i data-lucide="lock" style="width:13px;height:13px"></i>'
+    lucide.createIcons()
     return
   }
 
