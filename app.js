@@ -249,23 +249,37 @@ db.auth.getSession().then(async ({ data }) => {
 // DETECTAR CAMBIOS DE SESIÓN (cambio de email, etc)
 db.auth.onAuthStateChange(async (event, session) => {
   console.log('AUTH EVENT:', event, session?.user?.email)
+
   if (event === 'USER_UPDATED' && session) {
     usuarioActual = session.user
-
-    // Actualizar email en la tabla negocios
-    await db.from('negocios')
-      .update({ email: session.user.email })
-      .eq('id', negocioActual.id)
-
-    negocioActual.email = session.user.email
-
-    // Actualizar campo en ajustes si está visible
-    const emailInput = document.getElementById('ajustes-email')
-    if (emailInput) emailInput.value = session.user.email
-
-    mostrarToast('Email actualizado correctamente!')
+    if (negocioActual) {
+      await db.from('negocios')
+        .update({ email: session.user.email })
+        .eq('id', negocioActual.id)
+      negocioActual.email = session.user.email
+      const emailInput = document.getElementById('ajustes-email')
+      if (emailInput) emailInput.value = session.user.email
+      mostrarToast('Email actualizado correctamente!')
+    }
   }
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+
+  if (event === 'SIGNED_IN' && session) {
+    usuarioActual = session.user
+    // Si el email del usuario es distinto al del negocio, actualizamos
+    if (negocioActual && session.user.email !== negocioActual.email) {
+      await db.from('negocios')
+        .update({ email: session.user.email })
+        .eq('id', negocioActual.id)
+      negocioActual.email = session.user.email
+      const emailInput = document.getElementById('ajustes-email')
+      if (emailInput) emailInput.value = session.user.email
+      mostrarToast('Email actualizado correctamente!')
+    } else {
+      await verificarPerfil()
+    }
+  }
+
+  if (event === 'INITIAL_SESSION' && session) {
     usuarioActual = session.user
     await verificarPerfil()
   }
