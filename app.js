@@ -248,6 +248,7 @@ db.auth.getSession().then(async ({ data }) => {
 
 // DETECTAR CAMBIOS DE SESIÓN (cambio de email, etc)
 db.auth.onAuthStateChange(async (event, session) => {
+  console.log('AUTH EVENT:', event, session?.user?.email)
   if (event === 'USER_UPDATED' && session) {
     usuarioActual = session.user
 
