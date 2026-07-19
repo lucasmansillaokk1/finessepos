@@ -740,14 +740,14 @@ select:focus {
     padding: 12px 20px;
   }
 
-  .sidebar-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.3);
-    z-index: 98;
-    top: 60px;
-  }
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 98;
+  top: calc(60px + env(safe-area-inset-top));
+}
 
   .sidebar-overlay.visible {
     display: block;
