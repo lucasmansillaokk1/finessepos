@@ -716,20 +716,23 @@ select:focus {
 
 @media (max-width: 768px) {
 
-.sidebar {
-  position: fixed;
-  left: -220px;
-  top: calc(60px + env(safe-area-inset-top));
-  height: calc(100dvh - 60px - env(safe-area-inset-top));
+  .sidebar {
+    position: fixed;
+    left: -220px;
+    top: calc(60px + env(safe-area-inset-top));
+    height: calc(100dvh - 60px - env(safe-area-inset-top));
+    z-index: 99;
+    transition: left 0.3s;
+    width: 220px !important;
+  }
 
-.sidebar.mobile-abierto {
-  left: 0;
-  top: calc(60px + env(safe-area-inset-top));
-  height: calc(100dvh - 60px - env(safe-area-inset-top));
-  z-index: 150;
-  box-shadow: 4px 0 20px rgba(0,0,0,0.5);
-}
-}
+  .sidebar.mobile-abierto {
+    left: 0;
+    top: calc(60px + env(safe-area-inset-top));
+    height: calc(100dvh - 60px - env(safe-area-inset-top));
+    z-index: 150;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+  }
 
   .sidebar.mobile-abierto .menu-texto {
     display: block;
@@ -740,14 +743,14 @@ select:focus {
     padding: 12px 20px;
   }
 
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  z-index: 98;
-  top: calc(60px + env(safe-area-inset-top));
-}
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 98;
+    top: calc(60px + env(safe-area-inset-top));
+  }
 
   .sidebar-overlay.visible {
     display: block;
@@ -761,6 +764,7 @@ select:focus {
     padding: 16px;
     width: 100%;
     overflow-x: hidden;
+    margin-left: 0 !important;
   }
 
   .ventas-layout {
@@ -768,6 +772,14 @@ select:focus {
   }
 
   .ventas-der {
+    width: 100%;
+  }
+
+  .ventas-izq {
+    width: 100%;
+  }
+
+  #venta-items-wrapper {
     width: 100%;
   }
 
@@ -780,10 +792,10 @@ select:focus {
   }
 
   .tabla-wrapper {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 
   .tabla-ventas-desktop {
     display: none;
@@ -829,54 +841,51 @@ select:focus {
     gap: 6px;
   }
 
-  .contenido {
-  margin-left: 0 !important;
-}
+  .sidebar-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding-bottom: env(safe-area-inset-bottom, 12px);
+  }
 
-.sidebar-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding-bottom: env(safe-area-inset-bottom, 12px);
-}
+  .acciones {
+    display: none;
+  }
 
-.acciones {
-  flex-wrap: wrap;
-  gap: 4px;
-}
+  .btn-tres-puntos {
+    display: block;
+  }
 
-.acciones button {
-  padding: 4px 6px !important;
-}
+  .dashboard-graficos {
+    grid-template-columns: 1fr;
+  }
 
-.acciones .btn-editar,
-.acciones .btn-rojo {
-  font-size: 11px;
-  padding: 4px 8px !important;
-}
+  .comparativa-grid {
+    grid-template-columns: 1fr;
+  }
 
-.seccion-header {
-  flex-wrap: wrap;
-  gap: 10px;
-}
+  .seccion-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 
-.seccion-header h2 {
-  width: 100%;
-}
+  .seccion-header h2 {
+    width: 100%;
+  }
 
-.seccion-header > div {
-  width: 100%;
-  justify-content: flex-start;
-}
+  .seccion-header > div {
+    width: 100%;
+    justify-content: flex-start;
+  }
 
-.seccion-header .btn-verde,
-.seccion-header .btn-gris {
-  flex: 1;
-  justify-content: center;
-  font-size: 12px;
-  padding: 8px 10px;
-}
+  .seccion-header .btn-verde,
+  .seccion-header .btn-gris {
+    flex: 1;
+    justify-content: center;
+    font-size: 12px;
+    padding: 8px 10px;
+  }
 
 }
 
@@ -1291,12 +1300,6 @@ body.modo-oscuro {
   font-size: 14px;
   font-weight: 600;
   color: var(--verde);
-}
-
-@media (max-width: 768px) {
-  .dashboard-graficos {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ── ALERTA STOCK BAJO ── */
@@ -1796,12 +1799,6 @@ body.modo-oscuro .badge-categoria {
   width: fit-content;
 }
 
-@media (max-width: 768px) {
-  .comparativa-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* ── MENU TRES PUNTOS MOBILE ── */
 .menu-acciones-wrapper {
   position: relative;
@@ -1864,15 +1861,6 @@ body.modo-oscuro .badge-categoria {
   background: #fee2e2;
 }
 
-@media (max-width: 768px) {
-  .acciones {
-    display: none;
-  }
-
-  .btn-tres-puntos {
-    display: block;
-  }
-}
 
 
 
