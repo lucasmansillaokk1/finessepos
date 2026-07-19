@@ -722,9 +722,11 @@ select:focus {
   top: calc(60px + env(safe-area-inset-top));
   height: calc(100dvh - 60px - env(safe-area-inset-top));
 
-  .sidebar.mobile-abierto {
-    left: 0;
-  }
+.sidebar.mobile-abierto {
+  left: 0;
+  top: calc(60px + env(safe-area-inset-top));
+  height: calc(100dvh - 60px - env(safe-area-inset-top));
+} 
 }
 
   .sidebar.mobile-abierto .menu-texto {
