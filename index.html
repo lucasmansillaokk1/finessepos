@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <title>FINESSE - Sistema POS</title>
@@ -10,6 +11,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#39ff14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finesse POS">
+
 </head>
 <body>
 
@@ -830,21 +837,18 @@
     Seguridad
   </h3>
 
-  <!-- EMAIL -->
-  <div style="display:flex; gap:8px; align-items:flex-end">
-    <div class="campo">
+<!-- EMAIL -->
+<div class="campo">
   <label>Email de la cuenta</label>
-  <div style="display:grid; grid-template-columns: 1fr auto; gap:30px; align-items:center">
+  <div style="display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center">
     <input type="email" id="ajustes-email" placeholder="nuevo@email.com" />
     <button class="btn-verde" id="btn-guardar-email" style="padding:10px 14px; display:flex; align-items:center; justify-content:center">
-      <i data-lucide="send" style="width:20px;height:20px"></i>
+      <i data-lucide="send" style="width:16px;height:16px"></i>
     </button>
   </div>
   <p style="font-size:12px; color:var(--texto-suave); margin-top:4px">Al cambiarlo te llega un email de confirmación.</p>
+  <p id="ajustes-mensaje-email" style="font-size:13px; min-height:18px; margin-top:4px; word-break:break-word"></p>
 </div>
-<p id="ajustes-mensaje-email" style="font-size:13px; text-align:center; min-height:18px"></p>
-  </div>
-  <p id="ajustes-mensaje-email" style="font-size:13px; text-align:center; min-height:18px; margin-top:-10px"></p>
 
   <!-- PIN -->
   <div class="campo">
