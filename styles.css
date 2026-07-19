@@ -128,12 +128,13 @@ button:hover {
 .navbar {
   background: var(--fondo-nav);
   border-bottom: 1px solid var(--borde);
-  height: calc(60px + env(safe-area-inset-top));
+  height: 60px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  padding: 0 20px env(safe-area-inset-bottom, 0) 20px;
+  padding: 0 20px;
   padding-top: env(safe-area-inset-top);
+  height: calc(60px + env(safe-area-inset-top));
   position: fixed;
   top: 0;
   left: 0;
@@ -230,9 +231,9 @@ button:hover {
   flex-shrink: 0;
   box-shadow: 1px 0 8px rgba(0,0,0,0.04);
   position: fixed;
-  top: 60px;
+  top: calc(60px + env(safe-area-inset-top));
   left: 0;
-  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px - env(safe-area-inset-top));
   z-index: 50;
 }
 
@@ -715,19 +716,16 @@ select:focus {
 
 @media (max-width: 768px) {
 
-  .sidebar {
-    position: fixed;
-    left: -220px;
-    top: 60px;
-    height: calc(100vh - 60px);
-    z-index: 99;
-    transition: left 0.3s;
-    width: 220px !important;
-  }
+.sidebar {
+  position: fixed;
+  left: -220px;
+  top: calc(60px + env(safe-area-inset-top));
+  height: calc(100dvh - 60px - env(safe-area-inset-top));
 
   .sidebar.mobile-abierto {
     left: 0;
   }
+}
 
   .sidebar.mobile-abierto .menu-texto {
     display: block;
