@@ -853,8 +853,8 @@ select:focus {
   }
 
   .acciones {
-    display: none;
-  }
+  display: none !important;
+}
 
   .btn-tres-puntos {
     display: block;
