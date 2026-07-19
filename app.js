@@ -363,11 +363,29 @@ const productosBajoStock = data.filter(p => p.stock <= umbralStock)
 </td>
     <td>${p.categoria || '-'}</td>
     <td class="acciones">
-    ${p.codigo ? `<button class="btn-gris" style="padding:6px 10px" onclick="abrirCodigoOPremium('${p.id}', '${p.nombre}', ${p.precio}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0}, '${p.codigo}')"><i data-lucide="barcode" style="width:14px;height:14px"></i></button>` : ''}
-      <button class="btn-gris" style="padding:6px 10px" onclick="abrirAjusteStock('${p.id}', '${p.nombre}', ${p.stock})"><i data-lucide="package" style="width:14px;height:14px"></i></button>
-      <button class="btn-editar" onclick="abrirEditar('${p.id}', '${p.nombre}', ${p.precio}, ${p.stock}, '${p.categoria || ''}', '${p.codigo || ''}', ${p.costo || 0}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0})">Editar</button>
-      <button class="btn-rojo" onclick="eliminarProducto('${p.id}')">Eliminar</button>
-    </td>
+  <button class="btn-gris" style="padding:6px 10px" onclick="abrirAjusteStock('${p.id}', '${p.nombre}', ${p.stock})"><i data-lucide="package" style="width:14px;height:14px"></i></button>
+  ${p.codigo ? `<button class="btn-gris" style="padding:6px 10px" onclick="abrirCodigoOPremium('${p.id}', '${p.nombre}', ${p.precio}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0}, '${p.codigo}')"><i data-lucide="barcode" style="width:14px;height:14px"></i></button>` : ''}
+  <button class="btn-editar" onclick="abrirEditar('${p.id}', '${p.nombre}', ${p.precio}, ${p.stock}, '${p.categoria || ''}', '${p.codigo || ''}', ${p.costo || 0}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0})">Editar</button>
+  <button class="btn-rojo" onclick="eliminarProducto('${p.id}')">Eliminar</button>
+</td>
+<td class="menu-acciones-wrapper">
+  <button class="btn-tres-puntos" onclick="toggleMenuAcciones(this)">⋮</button>
+  <div class="menu-acciones-dropdown">
+    <div class="menu-accion-item" onclick="abrirAjusteStock('${p.id}', '${p.nombre}', ${p.stock}); cerrarMenusAcciones()">
+      <i data-lucide="package" style="width:15px;height:15px"></i> Ajustar stock
+    </div>
+    ${p.codigo ? `
+    <div class="menu-accion-item" onclick="abrirCodigoOPremium('${p.id}', '${p.nombre}', ${p.precio}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0}, '${p.codigo}'); cerrarMenusAcciones()">
+      <i data-lucide="barcode" style="width:15px;height:15px"></i> Ver código
+    </div>` : ''}
+    <div class="menu-accion-item" onclick="abrirEditar('${p.id}', '${p.nombre}', ${p.precio}, ${p.stock}, '${p.categoria || ''}', '${p.codigo || ''}', ${p.costo || 0}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0}); cerrarMenusAcciones()">
+      <i data-lucide="pencil" style="width:15px;height:15px"></i> Editar
+    </div>
+    <div class="menu-accion-item rojo" onclick="eliminarProducto('${p.id}'); cerrarMenusAcciones()">
+      <i data-lucide="trash-2" style="width:15px;height:15px"></i> Eliminar
+    </div>
+  </div>
+</td>
   </tr>
 `).join('')
 
@@ -2909,6 +2927,31 @@ function abrirCodigoOPremium(id, nombre, precio, precioMayor, precioRevendedor, 
     return
   }
   verCodigoBarras(id, nombre, precio, precioMayor, precioRevendedor, codigo)
+}
+
+// ── MENU TRES PUNTOS ──
+function toggleMenuAcciones(btn) {
+  cerrarMenusAcciones()
+  const dropdown = btn.nextElementSibling
+  dropdown.classList.toggle('visible')
+  
+  // Cerrar al hacer click afuera
+  setTimeout(() => {
+    document.addEventListener('click', cerrarMenusAcciones, { once: true })
+  }, 0)
+}
+
+function cerrarMenusAcciones() {
+  document.querySelectorAll('.menu-acciones-dropdown').forEach(d => d.classList.remove('visible'))
+}
+
+// ── PWA SERVICE WORKER ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(reg => console.log('SW registrado'))
+      .catch(err => console.log('SW error:', err))
+  })
 }
 
 lucide.createIcons()
