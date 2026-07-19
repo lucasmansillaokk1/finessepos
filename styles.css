@@ -128,11 +128,12 @@ button:hover {
 .navbar {
   background: var(--fondo-nav);
   border-bottom: 1px solid var(--borde);
-  height: 60px;
+  height: calc(60px + env(safe-area-inset-top));
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 20px env(safe-area-inset-bottom, 0) 20px;
+  padding-top: env(safe-area-inset-top);
   position: fixed;
   top: 0;
   left: 0;
@@ -214,8 +215,8 @@ button:hover {
 /* ── LAYOUT ── */
 .app-body {
   display: flex;
-  margin-top: 60px;
-  height: calc(100vh - 60px);
+  margin-top: calc(60px + env(safe-area-inset-top));
+  height: calc(100dvh - 60px - env(safe-area-inset-top));
 }
 
 /* ── SIDEBAR ── */
