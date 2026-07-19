@@ -726,7 +726,9 @@ select:focus {
   left: 0;
   top: calc(60px + env(safe-area-inset-top));
   height: calc(100dvh - 60px - env(safe-area-inset-top));
-} 
+  z-index: 150;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+}
 }
 
   .sidebar.mobile-abierto .menu-texto {
