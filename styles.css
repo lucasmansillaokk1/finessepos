@@ -221,6 +221,7 @@ button:hover {
 }
 
 /* ── SIDEBAR ── */
+
 .sidebar {
   width: 220px;
   background: var(--fondo-sidebar);
@@ -235,6 +236,8 @@ button:hover {
   left: 0;
   height: calc(100dvh - 60px - env(safe-area-inset-top));
   z-index: 50;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar.colapsado {
@@ -1012,12 +1015,6 @@ select:focus {
   border-top: 1px solid var(--borde);
   padding: 12px 0;
   background: var(--fondo-sidebar);
-}
-
-.sidebar {
-  position: fixed;
-  display: flex;
-  flex-direction: column;
 }
 
 .sidebar-menu {
