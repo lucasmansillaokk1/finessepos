@@ -406,11 +406,19 @@ document.getElementById('btn-nuevo-producto').addEventListener('click', () => {
   document.getElementById('producto-nombre').value = ''
   document.getElementById('producto-precio').value = ''
   document.getElementById('producto-precio-mayor').value = ''
-document.getElementById('producto-precio-revendedor').value = ''
+  document.getElementById('producto-precio-revendedor').value = ''
   document.getElementById('producto-stock').value = ''
   document.getElementById('producto-categoria').value = ''
   document.getElementById('producto-codigo').value = ''
   document.getElementById('producto-costo').value = ''
+  document.getElementById('producto-costo-fijo').value = ''
+  document.getElementById('producto-costo-variable').value = ''
+  document.getElementById('producto-costo-envio').value = ''
+  document.getElementById('producto-costo-impositivo').value = ''
+  document.getElementById('producto-margen').value = ''
+  document.getElementById('precio-sugerido').textContent = '$0'
+  document.getElementById('costos-avanzados').style.display = 'none'
+  document.getElementById('icono-costos').style.transform = 'rotate(0deg)'
   document.getElementById('modal-producto').style.display = 'flex'
   lucide.createIcons()
 })
@@ -449,10 +457,15 @@ document.getElementById('btn-guardar-producto').addEventListener('click', async 
   }
 
   const payload = { 
-    nombre, precio, stock, categoria, codigo, costo,
-    precio_mayor: precioMayor,
-    precio_revendedor: precioRevendedor
-  }
+  nombre, precio, stock, categoria, codigo, costo,
+  precio_mayor: precioMayor,
+  precio_revendedor: precioRevendedor,
+  costo_fijo: costoFijo,
+  costo_variable: costoVariable,
+  costo_envio: costoEnvio,
+  costo_impositivo: costoImpositivo,
+  margen_ganancia: margenGanancia
+}
 
   let error
 
@@ -489,8 +502,19 @@ function abrirEditar(id, nombre, precio, stock, categoria, codigo, costo, precio
   document.getElementById('producto-precio-mayor').value = precioMayor || ''
   document.getElementById('producto-precio-revendedor').value = precioRevendedor || ''
   document.getElementById('modal-producto').style.display = 'flex'
+  document.getElementById('producto-costo-fijo').value = ''
+document.getElementById('producto-costo-variable').value = ''
+document.getElementById('producto-costo-envio').value = ''
+document.getElementById('producto-costo-impositivo').value = ''
+document.getElementById('producto-margen').value = ''
+document.getElementById('precio-sugerido').textContent = '$0'
+document.getElementById('costos-avanzados').style.display = 'none'
+document.getElementById('icono-costos').style.transform = 'rotate(0deg)'
   lucide.createIcons()
+
 }
+
+
 
 document.getElementById('btn-guardar-producto').addEventListener('click', async () => {
   const id = document.getElementById('producto-id').value
@@ -505,6 +529,16 @@ document.getElementById('btn-guardar-producto').addEventListener('click', async 
   const precioMayor = precioMayorInput ? parseFloat(precioMayorInput) : null
   const precioRevendedorInput = document.getElementById('producto-precio-revendedor').value
   const precioRevendedor = precioRevendedorInput ? parseFloat(precioRevendedorInput) : null
+  const costoFijoInput = document.getElementById('producto-costo-fijo').value
+const costoFijo = costoFijoInput ? parseFloat(costoFijoInput) : null
+const costoVariableInput = document.getElementById('producto-costo-variable').value
+const costoVariable = costoVariableInput ? parseFloat(costoVariableInput) : null
+const costoEnvioInput = document.getElementById('producto-costo-envio').value
+const costoEnvio = costoEnvioInput ? parseFloat(costoEnvioInput) : null
+const costoImpositivo_input = document.getElementById('producto-costo-impositivo').value
+const costoImpositivo = costoImpositivo_input ? parseFloat(costoImpositivo_input) : null
+const margenInput = document.getElementById('producto-margen').value
+const margenGanancia = margenInput ? parseFloat(margenInput) : null
 
   if (!nombre || isNaN(precio) || isNaN(stock)) {
     mostrarToast('Completá nombre, precio y stock', 'error')
@@ -2953,6 +2987,55 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.log('SW error:', err))
   })
 }
+
+// ── COSTOS AVANZADOS ──
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-toggle-costos')) {
+    const panel = document.getElementById('costos-avanzados')
+    const icono = document.getElementById('icono-costos')
+    const visible = panel.style.display === 'flex'
+    panel.style.display = visible ? 'none' : 'flex'
+    icono.style.transform = visible ? 'rotate(0deg)' : 'rotate(90deg)'
+  }
+})
+
+;['producto-costo', 'producto-costo-fijo', 'producto-costo-variable', 'producto-costo-envio', 'producto-costo-impositivo', 'producto-margen'].forEach(id => {
+  const el = document.getElementById(id)
+  if (el) el.addEventListener('input', calcularPrecioSugerido)
+})
+
+function calcularPrecioSugerido() {
+  const costo = parseFloat(document.getElementById('producto-costo').value) || 0
+  const costoFijo = parseFloat(document.getElementById('producto-costo-fijo').value) || 0
+  const costoVariable = parseFloat(document.getElementById('producto-costo-variable').value) || 0
+  const costoEnvio = parseFloat(document.getElementById('producto-costo-envio').value) || 0
+  const costoImpositivo = parseFloat(document.getElementById('producto-costo-impositivo').value) || 0
+  const margen = parseFloat(document.getElementById('producto-margen').value) || 0
+
+  const costoTotal = costo + costoFijo + costoVariable + costoEnvio + costoImpositivo
+  const precioSugerido = costoTotal * (1 + margen / 100)
+
+  document.getElementById('precio-sugerido').textContent = '$' + Math.round(precioSugerido).toLocaleString('es-AR')
+}
+
+function calcularPrecioSugerido() {
+  const costo = parseFloat(document.getElementById('producto-costo').value) || 0
+  const costoFijo = parseFloat(document.getElementById('producto-costo-fijo').value) || 0
+  const costoVariable = parseFloat(document.getElementById('producto-costo-variable').value) || 0
+  const costoEnvio = parseFloat(document.getElementById('producto-costo-envio').value) || 0
+  const costoImpositivo = parseFloat(document.getElementById('producto-costo-impositivo').value) || 0
+  const margen = parseFloat(document.getElementById('producto-margen').value) || 0
+
+  const costoTotal = costo + costoFijo + costoVariable + costoEnvio + costoImpositivo
+  const precioSugerido = costoTotal * (1 + margen / 100)
+
+  document.getElementById('precio-sugerido').textContent = '$' + Math.round(precioSugerido).toLocaleString('es-AR')
+}
+
+// Calcular precio sugerido cuando cambia cualquier campo de costo
+;['producto-costo', 'producto-costo-fijo', 'producto-costo-variable', 'producto-costo-envio', 'producto-costo-impositivo', 'producto-margen'].forEach(id => {
+  document.getElementById(id).addEventListener('input', calcularPrecioSugerido)
+})
 
 lucide.createIcons()
 
