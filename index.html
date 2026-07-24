@@ -240,6 +240,8 @@
   </div>
 </div>
 
+<!-- SECCION PRODUCTOs -->
+
         <div id="seccion-productos" style="display:none">
   <div class="seccion-header">
   <h2 class="seccion-titulo">Productos</h2>
@@ -298,56 +300,92 @@
     </table>
   </div>
 
-  <!-- MODAL NUEVO/EDITAR PRODUCTO -->
-  <div class="modal-overlay" id="modal-producto" style="display:none">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 id="modal-titulo">Nuevo producto</h3>
-        <button class="btn-cerrar" id="btn-cerrar-modal">
-          <i data-lucide="x"></i>
+<!-- MODAL NUEVO/EDITAR PRODUCTO -->
+<div class="modal-overlay" id="modal-producto" style="display:none">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h3 id="modal-titulo">Nuevo producto</h3>
+      <button class="btn-cerrar" id="btn-cerrar-modal">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="producto-id" />
+      <div class="campo">
+        <label>Nombre</label>
+        <input type="text" id="producto-nombre" placeholder="Ej: Remera básica" />
+      </div>
+      <div class="campo">
+        <label>Costo</label>
+        <input type="number" id="producto-costo" placeholder="Ej: 3000" />
+      </div>
+      <div class="campo">
+        <label>Precio Minorista</label>
+        <input type="number" id="producto-precio" placeholder="Ej: 7500" />
+      </div>
+      <div class="campo">
+        <label>Precio Mayorista <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+        <input type="number" id="producto-precio-mayor" placeholder="Ej: 6000" />
+      </div>
+      <div class="campo">
+        <label>Precio Revendedor <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+        <input type="number" id="producto-precio-revendedor" placeholder="Ej: 5300" />
+      </div>
+      <div class="campo">
+        <label>Stock</label>
+        <input type="number" id="producto-stock" placeholder="Ej: 10" />
+      </div>
+      <div class="campo">
+        <label>Categoría</label>
+        <input type="text" id="producto-categoria" placeholder="Ej: Remeras" />
+      </div>
+      <div class="campo">
+        <label>Código / PLU <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+        <input type="text" id="producto-codigo" placeholder="Ej: 7790001234567" />
+      </div>
+
+      <!-- COSTOS AVANZADOS -->
+      <div class="campo">
+        <button type="button" id="btn-toggle-costos" style="background:none; border:none; cursor:pointer; color:var(--verde); font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px; padding:0">
+          <i data-lucide="chevron-right" id="icono-costos" style="width:16px;height:16px; transition:transform 0.2s"></i>
+          Costos avanzados (opcional)
         </button>
       </div>
-      <div class="modal-body">
-  <input type="hidden" id="producto-id" />
-  <div class="campo">
-    <label>Nombre</label>
-    <input type="text" id="producto-nombre" placeholder="Ej: Remera básica" />
-  </div>
-<div class="campo">
-  <label>Costo <span style="color:var(--texto-suave); font-weight:400"></span></label>
-  <input type="number" id="producto-costo" placeholder="Ej: 3000" />
-</div>
-<div class="campo">
-  <label>Precio Minorista</label>
-  <input type="number" id="producto-precio" placeholder="Ej: 7500" />
-</div>
-<div class="campo">
-  <label>Precio Mayorista <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
-  <input type="number" id="producto-precio-mayor" placeholder="Ej: 6000" />
-</div>
-<div class="campo">
-  <label>Precio Revendedor <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
-  <input type="number" id="producto-precio-revendedor" placeholder="Ej: 5300" />
-</div>
-  <div class="campo">
-    <label>Stock</label>
-    <input type="number" id="producto-stock" placeholder="Ej: 10" />
-  </div>
-  <div class="campo">
-    <label>Categoría</label>
-    <input type="text" id="producto-categoria" placeholder="Ej: Remeras" />
-  </div>
-  <div class="campo">
-    <label>Código / PLU <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
-    <input type="text" id="producto-codigo" placeholder="Ej: 7790001234567" />
-  </div>
-</div>
-      <div class="modal-footer">
-        <button class="btn-gris" id="btn-cancelar-producto">Cancelar</button>
-        <button class="btn-verde" id="btn-guardar-producto">Guardar</button>
+
+      <div id="costos-avanzados" style="display:none; flex-direction:column; gap:14px; background:var(--fondo); border-radius:10px; padding:14px; border:1px solid var(--borde)">
+        <div class="campo">
+          <label>Costo fijo <span style="color:var(--texto-suave); font-weight:400">(alquiler, servicios prorrateados)</span></label>
+          <input type="number" id="producto-costo-fijo" placeholder="Ej: 500" />
+        </div>
+        <div class="campo">
+          <label>Costo variable <span style="color:var(--texto-suave); font-weight:400">(packaging, insumos)</span></label>
+          <input type="number" id="producto-costo-variable" placeholder="Ej: 300" />
+        </div>
+        <div class="campo">
+          <label>Costo de envío <span style="color:var(--texto-suave); font-weight:400">(flete, logística)</span></label>
+          <input type="number" id="producto-costo-envio" placeholder="Ej: 200" />
+        </div>
+        <div class="campo">
+          <label>Costo impositivo <span style="color:var(--texto-suave); font-weight:400">(IVA, IIBB, etc.)</span></label>
+          <input type="number" id="producto-costo-impositivo" placeholder="Ej: 400" />
+        </div>
+        <div class="campo">
+          <label>Margen de ganancia deseado (%)</label>
+          <input type="number" id="producto-margen" placeholder="Ej: 30" />
+        </div>
+        <div style="background:var(--verde-suave); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center">
+          <span style="font-size:13px; font-weight:600; color:var(--texto)">Precio sugerido:</span>
+          <span id="precio-sugerido" style="font-size:18px; font-weight:bold; color:var(--verde)">$0</span>
+        </div>
       </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-producto">Cancelar</button>
+      <button class="btn-verde" id="btn-guardar-producto">Guardar</button>
     </div>
   </div>
+</div>
 </div>
 
         <div id="seccion-ventas" style="display:none">
