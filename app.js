@@ -1016,7 +1016,7 @@ async function toggleDetalle(ventaId) {
 
   const { data: items } = await db
     .from('venta_items')
-    .select('*, productos(codigo)')
+    .select('*')
     .eq('venta_id', ventaId)
 
   if (!items || items.length === 0) {
@@ -1024,14 +1024,38 @@ async function toggleDetalle(ventaId) {
     return
   }
 
-  contenido.innerHTML = items.map(i => `
-    <div class="detalle-item">
-      <span class="detalle-codigo">${i.productos?.codigo || '-'}</span>
-      <span class="detalle-nombre">${i.nombre_producto}</span>
-      <span class="detalle-cantidad">x${i.cantidad}</span>
-      <span class="detalle-subtotal">$${Number(i.precio_unitario * i.cantidad).toLocaleString('es-AR')}</span>
-    </div>
-  `).join('')
+  const totalVenta = items.reduce((acc, i) => acc + (i.precio_unitario * i.cantidad), 0)
+
+contenido.innerHTML = `
+  <table style="width:100%; border-collapse:collapse; font-size:13px">
+    <thead>
+      <tr style="border-bottom:1px solid var(--borde)">
+        <th style="padding:8px 12px; text-align:left; color:var(--texto-suave); font-weight:600">PLU</th>
+        <th style="padding:8px 12px; text-align:left; color:var(--texto-suave); font-weight:600">PRODUCTO</th>
+        <th style="padding:8px 12px; text-align:center; color:var(--texto-suave); font-weight:600">CANT.</th>
+        <th style="padding:8px 12px; text-align:right; color:var(--texto-suave); font-weight:600">PRECIO</th>
+        <th style="padding:8px 12px; text-align:right; color:var(--texto-suave); font-weight:600">SUBTOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map(i => `
+        <tr style="border-bottom:1px solid var(--borde)">
+          <td style="padding:10px 12px; color:var(--verde); font-weight:600">${i.codigo || '-'}</td>
+          <td style="padding:10px 12px; color:var(--texto)">${i.nombre_producto}</td>
+          <td style="padding:10px 12px; text-align:center; color:var(--texto)">${i.cantidad}</td>
+          <td style="padding:10px 12px; text-align:right; color:var(--texto)">$${Number(i.precio_unitario).toLocaleString('es-AR')}</td>
+          <td style="padding:10px 12px; text-align:right; color:var(--verde); font-weight:600">$${Number(i.precio_unitario * i.cantidad).toLocaleString('es-AR')}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+    <tfoot>
+      <tr style="border-top:2px solid var(--borde)">
+        <td colspan="4" style="padding:10px 12px; text-align:right; font-weight:600; color:var(--texto-suave)">TOTAL</td>
+        <td style="padding:10px 12px; text-align:right; font-weight:bold; font-size:15px; color:var(--verde)">$${Number(totalVenta).toLocaleString('es-AR')}</td>
+      </tr>
+    </tfoot>
+  </table>
+`
 }
 
 // ── CAJA ──
@@ -3042,6 +3066,196 @@ function calcularPrecioSugerido() {
 // Calcular precio sugerido cuando cambia cualquier campo de costo
 ;['producto-costo', 'producto-costo-fijo', 'producto-costo-variable', 'producto-costo-envio', 'producto-costo-impositivo', 'producto-margen'].forEach(id => {
   document.getElementById(id).addEventListener('input', calcularPrecioSugerido)
+})
+
+// ── IMPORTAR HISTORIAL ──
+let ventasParaImportar = []
+
+document.getElementById('btn-importar-historial').addEventListener('click', () => {
+  document.getElementById('modal-importar-historial').style.display = 'flex'
+  document.getElementById('importar-historial-preview').style.display = 'none'
+  document.getElementById('btn-confirmar-importar-historial').style.display = 'none'
+  document.getElementById('importar-historial-archivo').value = ''
+  ventasParaImportar = []
+  lucide.createIcons()
+})
+
+document.getElementById('btn-cerrar-importar-historial').addEventListener('click', () => {
+  document.getElementById('modal-importar-historial').style.display = 'none'
+})
+
+document.getElementById('btn-cancelar-importar-historial').addEventListener('click', () => {
+  document.getElementById('modal-importar-historial').style.display = 'none'
+})
+
+document.getElementById('importar-historial-zona').addEventListener('click', () => {
+  document.getElementById('importar-historial-archivo').click()
+})
+
+document.getElementById('importar-historial-archivo').addEventListener('change', (e) => {
+  const file = e.target.files[0]
+  if (file) procesarCSVHistorial(file)
+})
+
+function parsearLineaCSV(linea) {
+  const resultado = []
+  let campo = ''
+  let dentroComillas = false
+  for (let i = 0; i < linea.length; i++) {
+    const char = linea[i]
+    if (char === '"') {
+      dentroComillas = !dentroComillas
+    } else if (char === ',' && !dentroComillas) {
+      resultado.push(campo.trim())
+      campo = ''
+    } else {
+      campo += char
+    }
+  }
+  resultado.push(campo.trim())
+  return resultado
+}
+
+function limpiarMonto(valor) {
+  if (!valor) return 0
+  return parseFloat(valor.toString().replace(/\$/g, '').replace(/\./g, '').replace(',', '.')) || 0
+}
+
+function mapearMetodoPago(metodo) {
+  if (!metodo) return 'efectivo'
+  const m = metodo.toLowerCase()
+  if (m.includes('transferencia') && m.includes('efectivo')) return 'transferencia'
+  if (m.includes('transferencia')) return 'transferencia'
+  if (m.includes('debito')) return 'debito'
+  if (m.includes('credito')) return 'credito'
+  return 'efectivo'
+}
+
+function parsearFecha(fechaStr) {
+  if (!fechaStr) return new Date().toISOString()
+  
+  const meses = {
+    'ene': 0, 'feb': 1, 'mar': 2, 'abr': 3, 'may': 4, 'jun': 5,
+    'jul': 6, 'ago': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dic': 11
+  }
+  
+  const partes = fechaStr.toLowerCase().trim().split(' ')
+  if (partes.length === 3) {
+    const dia = parseInt(partes[0])
+    const mes = meses[partes[1]]
+    const anio = parseInt(partes[2])
+    if (!isNaN(dia) && mes !== undefined && !isNaN(anio)) {
+      return new Date(anio, mes, dia, 12, 0, 0).toISOString()
+    }
+  }
+  
+  return new Date().toISOString()
+}
+
+function procesarCSVHistorial(file) {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const texto = e.target.result
+    const lineas = texto.trim().split('\n')
+
+    // Buscar la línea de encabezados (la que tiene TICKET)
+    let headerIndex = -1
+    for (let i = 0; i < lineas.length; i++) {
+      if (lineas[i].toUpperCase().includes('TICKET')) {
+        headerIndex = i
+        break
+      }
+    }
+
+    if (headerIndex === -1) {
+      mostrarToast('No se encontró la fila de encabezados', 'error')
+      return
+    }
+
+    const filas = lineas.slice(headerIndex + 1).filter(l => l.trim() !== '')
+    const ticketsMap = {}
+
+    filas.forEach(linea => {
+      const cols = parsearLineaCSV(linea)
+      const ticket = cols[0]?.trim()
+      const fecha = cols[1]?.trim()
+      const plu = cols[2]?.trim()
+      const producto = cols[3]?.trim()
+      const cantidad = parseInt(cols[4]) || 1
+      const precio = limpiarMonto(cols[5])
+      const total = limpiarMonto(cols[6])
+      const metodoPago = mapearMetodoPago(cols[7])
+      const cliente = cols[10]?.trim() || null
+
+      if (!ticket || !producto) return
+
+      if (!ticketsMap[ticket]) {
+        ticketsMap[ticket] = {
+          numero_ticket: parseInt(ticket),
+          fecha: parsearFecha(fecha),
+          metodo_pago: metodoPago,
+          cliente: cliente,
+          items: [],
+          total: 0
+        }
+      }
+
+      ticketsMap[ticket].items.push({
+        nombre_producto: producto,
+        precio_unitario: precio,
+        cantidad: cantidad,
+        codigo: plu || null
+      })
+
+      ticketsMap[ticket].total += total || (precio * cantidad)
+    })
+
+    ventasParaImportar = Object.values(ticketsMap).sort((a, b) => a.numero_ticket - b.numero_ticket)
+
+    document.getElementById('importar-historial-titulo').textContent = 
+      `${ventasParaImportar.length} ventas listas para importar (${filas.length} productos en total)`
+    document.getElementById('importar-historial-preview').style.display = 'block'
+    document.getElementById('btn-confirmar-importar-historial').style.display = 'flex'
+  }
+  reader.readAsText(file)
+}
+
+document.getElementById('btn-confirmar-importar-historial').addEventListener('click', async () => {
+  if (ventasParaImportar.length === 0) return
+
+  let exitosas = 0
+  let errores = 0
+
+  for (const venta of ventasParaImportar) {
+    const { data: ventaCreada, error } = await db.from('ventas').insert({
+      negocio_id: negocioActual.id,
+      total: venta.total,
+      metodo_pago: venta.metodo_pago,
+      cliente: venta.cliente,
+      fecha: venta.fecha,
+      numero_ticket: venta.numero_ticket
+    }).select().single()
+
+    if (error) {
+      errores++
+      continue
+    }
+
+    const items = venta.items.map(i => ({
+  venta_id: ventaCreada.id,
+  nombre_producto: i.nombre_producto,
+  precio_unitario: i.precio_unitario,
+  cantidad: i.cantidad,
+  codigo: i.codigo || null
+}))
+
+    await db.from('venta_items').insert(items)
+    exitosas++
+  }
+
+  document.getElementById('modal-importar-historial').style.display = 'none'
+  mostrarToast(`${exitosas} ventas importadas!`)
+  cargarHistorial()
 })
 
 lucide.createIcons()
