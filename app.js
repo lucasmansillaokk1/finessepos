@@ -2965,14 +2965,21 @@ function abrirCodigoOPremium(id, nombre, precio, precioMayor, precioRevendedor, 
 
 // ── MENU TRES PUNTOS ──
 function toggleMenuAcciones(btn) {
-  cerrarMenusAcciones()
   const dropdown = btn.nextElementSibling
-  dropdown.classList.toggle('visible')
+  const estaAbierto = dropdown.classList.contains('visible')
   
-  // Cerrar al hacer click afuera
-  setTimeout(() => {
-    document.addEventListener('click', cerrarMenusAcciones, { once: true })
-  }, 0)
+  cerrarMenusAcciones()
+  
+  if (!estaAbierto) {
+    dropdown.classList.add('visible')
+    setTimeout(() => {
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+          cerrarMenusAcciones()
+        }
+      }, { once: true })
+    }, 0)
+  }
 }
 
 function cerrarMenusAcciones() {
