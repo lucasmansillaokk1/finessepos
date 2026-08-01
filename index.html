@@ -493,9 +493,12 @@
   </div>
 </div>
 
-        <div id="seccion-historial" style="display:none">
+<div id="seccion-historial" style="display:none">
   <div class="seccion-header">
     <h2 class="seccion-titulo">Historial de ventas</h2>
+    <button class="btn-gris" id="btn-importar-historial" style="display:flex; align-items:center; gap:6px">
+      <i data-lucide="upload" style="width:15px;height:15px"></i> Importar historial
+    </button>
   </div>
 
   <!-- FILTROS -->
@@ -1228,6 +1231,38 @@
     <div class="modal-footer">
       <button class="btn-gris" id="btn-cancelar-cerrar-sesion">Cancelar</button>
       <button class="btn-rojo" id="btn-confirmar-cerrar-sesion" style="padding:10px 18px; font-size:14px">Cerrar sesión</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR HISTORIAL -->
+<div class="modal-overlay" id="modal-importar-historial" style="display:none">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h3>Importar historial de ventas</h3>
+      <button class="btn-cerrar" id="btn-cerrar-importar-historial">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="importar-instrucciones">
+        <i data-lucide="info" style="width:18px;height:18px;color:var(--verde);flex-shrink:0"></i>
+        <p>Exportá tu hoja de VENTAS desde Google Sheets como CSV y subila acá. El sistema va a agrupar automáticamente por número de ticket.</p>
+      </div>
+      <div class="importar-zona" id="importar-historial-zona">
+        <i data-lucide="upload-cloud" style="width:36px;height:36px;color:var(--texto-suave)"></i>
+        <p style="font-size:14px; color:var(--texto-suave); margin-top:8px">Hacé clic o arrastrá tu CSV acá</p>
+        <input type="file" id="importar-historial-archivo" accept=".csv" style="display:none" />
+      </div>
+      <div id="importar-historial-preview" style="display:none">
+        <p style="font-size:13px; font-weight:600; margin-bottom:8px" id="importar-historial-titulo"></p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-importar-historial">Cancelar</button>
+      <button class="btn-verde" id="btn-confirmar-importar-historial" style="display:none; justify-content:center; align-items:center; gap:6px">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Importar ventas
+      </button>
     </div>
   </div>
 </div>
