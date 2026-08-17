@@ -204,6 +204,12 @@ document.querySelectorAll('.menu-item').forEach(item => {
     if (seccion === 'productos') cargarProductos()
     if (seccion === 'historial') cargarHistorial()
     if (seccion === 'caja') cargarCaja()
+      if (seccion === 'ventas') {
+  const ahora = new Date()
+  const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 16)
+  document.getElementById('venta-fecha').value = fechaLocal
+}
     if (seccion === 'reportes') {
   if (!verificarLimiteFree('reportes')) {
     document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'))
@@ -834,11 +840,27 @@ const metodo = document.getElementById('venta-metodo').value
 
   const cliente = document.getElementById('venta-cliente').value.trim() || null
 
+  const fechaInput = document.getElementById('venta-fecha').value
+const fechaVenta = fechaInput ? new Date(fechaInput).toISOString() : new Date().toISOString()
+
+  // Obtener el próximo número de ticket
+  const { data: ultimaVenta } = await db
+    .from('ventas')
+    .select('numero_ticket')
+    .eq('negocio_id', negocioActual.id)
+    .order('numero_ticket', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const proximoTicket = (ultimaVenta?.numero_ticket || 0) + 1
+
   const { data: venta, error } = await db.from('ventas').insert({
     negocio_id: negocioActual.id,
     total,
     metodo_pago: metodo,
-    cliente
+    cliente,
+    fecha: fechaVenta,
+    numero_ticket: proximoTicket
   }).select().single()
 
   if (error) {
@@ -846,13 +868,17 @@ const metodo = document.getElementById('venta-metodo').value
     return
   }
 
+  const subtotalSinDescuento = itemsVenta.reduce((acc, i) => acc + i.precio_base * i.cantidad, 0)
+  const factorDescuento = subtotalSinDescuento > 0 ? total / subtotalSinDescuento : 1
+
   await db.from('venta_items').insert(
     itemsVenta.map(i => ({
       venta_id: venta.id,
       producto_id: i.id,
       nombre_producto: i.nombre,
-      precio_unitario: i.precio,
-      cantidad: i.cantidad
+      precio_unitario: Math.round(i.precio * factorDescuento),
+      cantidad: i.cantidad,
+      codigo: i.codigo || null
     }))
   )
 
@@ -869,12 +895,19 @@ const metodo = document.getElementById('venta-metodo').value
   productos: { codigo: i.codigo || null }
 }))]
 
+venta.numero_ticket = venta.numero_ticket
+
   itemsVenta = []
 renderizarItemsVenta()
 document.getElementById('venta-efectivo').value = ''
 document.getElementById('vuelto-box').style.display = 'none'
 document.getElementById('venta-cliente').value = ''
 document.getElementById('descuento-valor').value = ''
+
+const ahora = new Date()
+const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000)
+  .toISOString().slice(0, 16)
+document.getElementById('venta-fecha').value = fechaLocal
 
   mostrarToast('Venta registrada!')
   mostrarTicket(venta, itemsParaTicket)
@@ -895,7 +928,7 @@ async function cargarHistorial(filtros = {}) {
     .from('ventas')
     .select('*')
     .eq('negocio_id', negocioActual.id)
-    .order('fecha', { ascending: false })
+    .order('numero_ticket', { ascending: false })
 
     if (!esPremium() && filtros.desde) {
   const hace30dias = new Date()
@@ -947,9 +980,10 @@ if (!esPremium()) {
         <td onclick="toggleDetalle('${v.id}')"><span class="badge-metodo">${v.metodo_pago}</span></td>
         <td onclick="toggleDetalle('${v.id}')">$${Number(v.total).toLocaleString('es-AR')}</td>
         <td style="display:flex; gap:6px">
-          <button class="btn-gris" style="padding:6px 10px" onclick="verTicketHistorial('${v.id}')"><i data-lucide="receipt" style="width:14px;height:14px"></i></button>
-          <button class="btn-rojo" onclick="confirmarEliminarVenta('${v.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
-        </td>
+  <button class="btn-gris" style="padding:6px 10px" onclick="verTicketHistorial('${v.id}')"><i data-lucide="receipt" style="width:14px;height:14px"></i></button>
+  <button class="btn-gris" style="padding:6px 10px" onclick="editarFechaVenta('${v.id}', '${v.fecha}')"><i data-lucide="calendar" style="width:14px;height:14px"></i></button>
+  <button class="btn-rojo" onclick="confirmarEliminarVenta('${v.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+</td>
       </tr>
       <tr class="fila-detalle" id="detalle-${v.id}" style="display:none">
         <td colspan="7">
@@ -3255,6 +3289,55 @@ document.getElementById('btn-confirmar-importar-historial').addEventListener('cl
 
   document.getElementById('modal-importar-historial').style.display = 'none'
   mostrarToast(`${exitosas} ventas importadas!`)
+  cargarHistorial()
+})
+
+// ── EDITAR FECHA VENTA ──
+let ventaEditandoFecha = null
+
+function editarFechaVenta(ventaId, fechaActual) {
+  ventaEditandoFecha = ventaId
+  const fecha = new Date(fechaActual)
+  const fechaLocal = new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 16)
+  document.getElementById('editar-fecha-input').value = fechaLocal
+  document.getElementById('modal-editar-fecha').style.display = 'flex'
+  lucide.createIcons()
+}
+
+document.getElementById('btn-cerrar-editar-fecha').addEventListener('click', () => {
+  document.getElementById('modal-editar-fecha').style.display = 'none'
+  ventaEditandoFecha = null
+})
+
+document.getElementById('btn-cancelar-editar-fecha').addEventListener('click', () => {
+  document.getElementById('modal-editar-fecha').style.display = 'none'
+  ventaEditandoFecha = null
+})
+
+document.getElementById('btn-guardar-editar-fecha').addEventListener('click', async () => {
+  if (!ventaEditandoFecha) return
+
+  const fechaInput = document.getElementById('editar-fecha-input').value
+  if (!fechaInput) {
+    mostrarToast('Ingresá una fecha válida', 'error')
+    return
+  }
+
+  const fechaNueva = new Date(fechaInput).toISOString()
+
+  const { error } = await db.from('ventas')
+    .update({ fecha: fechaNueva })
+    .eq('id', ventaEditandoFecha)
+
+  if (error) {
+    mostrarToast('Error al actualizar la fecha', 'error')
+    return
+  }
+
+  document.getElementById('modal-editar-fecha').style.display = 'none'
+  ventaEditandoFecha = null
+  mostrarToast('Fecha actualizada!')
   cargarHistorial()
 })
 
