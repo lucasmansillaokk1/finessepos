@@ -572,10 +572,12 @@ const margenGanancia = margenInput ? parseFloat(margenInput) : null
 })
 
 // ── ELIMINAR PRODUCTO ──
+let productoAEliminar = null
+
 async function eliminarProducto(id) {
-  if (!confirm('¿Seguro que querés eliminar este producto?')) return
-  await db.from('productos').delete().eq('id', id)
-  cargarProductos()
+  productoAEliminar = id
+  document.getElementById('modal-eliminar-producto').style.display = 'flex'
+  lucide.createIcons()
 }
 
 // ── VENTAS ──
@@ -963,9 +965,24 @@ if (!esPremium()) {
   }
 
   const totalFiltrado = ventas.reduce((acc, v) => acc + Number(v.total), 0)
-  document.getElementById('filtros-cantidad').textContent = ventas.length
-  document.getElementById('filtros-total').textContent = '$' + totalFiltrado.toLocaleString('es-AR')
-  resumen.style.display = 'flex'
+document.getElementById('filtros-cantidad').textContent = ventas.length
+document.getElementById('filtros-total').textContent = '$' + totalFiltrado.toLocaleString('es-AR')
+
+// GANANCIA ESTIMADA
+const ventaIds = ventas.map(v => v.id)
+const { data: itemsVentas } = await db
+  .from('venta_items')
+  .select('*, productos(costo)')
+  .in('venta_id', ventaIds)
+
+let gananciaTotal = 0
+;(itemsVentas || []).forEach(i => {
+  const costo = i.productos?.costo || 0
+  gananciaTotal += (i.precio_unitario - costo) * i.cantidad
+})
+
+document.getElementById('filtros-ganancia').textContent = '$' + Math.round(gananciaTotal).toLocaleString('es-AR')
+resumen.style.display = 'flex'
 
   tbody.innerHTML = ventas.map(v => {
     const fecha = new Date(v.fecha)
@@ -1656,12 +1673,32 @@ document.getElementById('btn-confirmar-pin').addEventListener('click', () => {
 
   if (pinIngresado === negocioActual.pin_seguridad) {
     document.getElementById('modal-pin').style.display = 'none'
+    intentosFallidosPin = 0
     toggleInfoSensible(true)
     mostrarToast('Info desbloqueada!')
   } else {
-    document.getElementById('pin-error').textContent = 'PIN incorrecto, intentá de nuevo'
-    document.querySelectorAll('.pin-input').forEach(input => input.value = '')
-    document.querySelectorAll('.pin-input')[0].focus()
+    intentosFallidosPin++
+if (intentosFallidosPin >= MAX_INTENTOS_PIN) {
+  document.getElementById('modal-pin').style.display = 'none'
+  intentosFallidosPin = 0
+  document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+  mostrarToast(`PIN bloqueado por 3 intentos fallidos. Esperá 30 segundos.`, 'error')
+  
+  // Bloquear el botón del candado por 30 segundos
+  const btnCandado = document.getElementById('btn-toggle-pin')
+  btnCandado.disabled = true
+  btnCandado.style.opacity = '0.3'
+  setTimeout(() => {
+    btnCandado.disabled = false
+    btnCandado.style.opacity = '1'
+    intentosFallidosPin = 0
+    mostrarToast('Ya podés intentar el PIN de nuevo')
+  }, 30000)
+} else {
+  document.getElementById('pin-error').textContent = `PIN incorrecto. Te quedan ${MAX_INTENTOS_PIN - intentosFallidosPin} intento${MAX_INTENTOS_PIN - intentosFallidosPin === 1 ? '' : 's'}`
+  document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+  document.querySelectorAll('.pin-input')[0].focus()
+}
   }
 })
 
@@ -1730,6 +1767,8 @@ document.getElementById('btn-guardar-logo').addEventListener('click', async () =
 
 // ── PIN DE SEGURIDAD ──
 let infoDesbloqueada = false
+let intentosFallidosPin = 0
+const MAX_INTENTOS_PIN = 3
 
 function toggleInfoSensible(mostrar) {
   infoDesbloqueada = mostrar
@@ -1742,6 +1781,7 @@ function toggleInfoSensible(mostrar) {
   // BLOQUEAR/DESBLOQUEAR BOTONES DE ACCIONES (excepto el de código de barras)
 document.querySelectorAll('#tabla-productos .acciones button').forEach(btn => {
   if (btn.getAttribute('onclick')?.includes('verCodigoBarras')) return
+  if (btn.getAttribute('onclick')?.includes('abrirCodigoOPremium')) return
   btn.disabled = !mostrar
   btn.style.opacity = mostrar ? '1' : '0.3'
   btn.style.cursor = mostrar ? 'pointer' : 'not-allowed'
@@ -3339,6 +3379,26 @@ document.getElementById('btn-guardar-editar-fecha').addEventListener('click', as
   ventaEditandoFecha = null
   mostrarToast('Fecha actualizada!')
   cargarHistorial()
+})
+
+// ── ELIMINAR PRODUCTO ──
+document.getElementById('btn-cerrar-modal-eliminar-producto').addEventListener('click', () => {
+  document.getElementById('modal-eliminar-producto').style.display = 'none'
+  productoAEliminar = null
+})
+
+document.getElementById('btn-cancelar-eliminar-producto').addEventListener('click', () => {
+  document.getElementById('modal-eliminar-producto').style.display = 'none'
+  productoAEliminar = null
+})
+
+document.getElementById('btn-confirmar-eliminar-producto').addEventListener('click', async () => {
+  if (!productoAEliminar) return
+  await db.from('productos').delete().eq('id', productoAEliminar)
+  document.getElementById('modal-eliminar-producto').style.display = 'none'
+  productoAEliminar = null
+  mostrarToast('Producto eliminado!')
+  cargarProductos()
 })
 
 lucide.createIcons()
