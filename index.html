@@ -472,6 +472,11 @@
           </select>
         </div>
 
+        <div class="campo">
+  <label>Fecha de la venta</label>
+  <input type="datetime-local" id="venta-fecha" />
+</div>
+
         <div class="campo" id="campo-efectivo">
           <label>Con cuánto paga</label>
           <input type="number" id="venta-efectivo" placeholder="Ej: 10000" />
@@ -1262,6 +1267,30 @@
       <button class="btn-gris" id="btn-cancelar-importar-historial">Cancelar</button>
       <button class="btn-verde" id="btn-confirmar-importar-historial" style="display:none; justify-content:center; align-items:center; gap:6px">
         <i data-lucide="check" style="width:15px;height:15px"></i> Importar ventas
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR FECHA VENTA -->
+<div class="modal-overlay" id="modal-editar-fecha" style="display:none">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <h3>Editar fecha de venta</h3>
+      <button class="btn-cerrar" id="btn-cerrar-editar-fecha">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="campo">
+        <label>Nueva fecha y hora</label>
+        <input type="datetime-local" id="editar-fecha-input" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-editar-fecha">Cancelar</button>
+      <button class="btn-verde" id="btn-guardar-editar-fecha" style="justify-content:center">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
       </button>
     </div>
   </div>
