@@ -545,9 +545,12 @@
 
   <!-- RESUMEN FILTRADO -->
   <div class="filtros-resumen" id="filtros-resumen" style="display:none">
-    <span>Mostrando <strong id="filtros-cantidad">0</strong> ventas</span>
-    <span>Total: <strong id="filtros-total" style="color:var(--verde)">$0</strong></span>
-  </div>
+  <span>Mostrando <strong id="filtros-cantidad">0</strong> ventas</span>
+  <span>Total: <strong id="filtros-total" style="color:var(--verde)">$0</strong></span>
+  <span class="info-sensible" style="filter:${infoDesbloqueada ? 'none' : 'blur(4px)'}; user-select:${infoDesbloqueada ? 'auto' : 'none'}">
+    Ganancia: <strong id="filtros-ganancia" style="color:var(--verde)">$0</strong>
+  </span>
+</div>
 
   <div class="tabla-wrapper">
     <table class="tabla">
@@ -1292,6 +1295,25 @@
       <button class="btn-verde" id="btn-guardar-editar-fecha" style="justify-content:center">
         <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ELIMINAR PRODUCTO -->
+<div class="modal-overlay" id="modal-eliminar-producto" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>Eliminar producto</h3>
+      <button class="btn-cerrar" id="btn-cerrar-modal-eliminar-producto">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px; color:var(--texto-suave)">¿Estás seguro que querés eliminar este producto? Esta acción no se puede deshacer.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-eliminar-producto">Cancelar</button>
+      <button class="btn-rojo" id="btn-confirmar-eliminar-producto" style="padding:10px 18px; font-size:14px">Eliminar</button>
     </div>
   </div>
 </div>
