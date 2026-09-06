@@ -395,6 +395,13 @@ const productosBajoStock = data.filter(p => p.stock <= umbralStock)
   </tr>
 `).join('')
 
+// VALOR TOTAL INVENTARIO
+const valorInventario = data.reduce((acc, p) => acc + (Number(p.costo || 0) * Number(p.stock || 0)), 0)
+document.getElementById('valor-inventario-total').textContent = '$' + Math.round(valorInventario).toLocaleString('es-AR')
+const cardInventario = document.getElementById('card-valor-inventario')
+cardInventario.style.filter = infoDesbloqueada ? 'none' : 'blur(4px)'
+cardInventario.style.userSelect = infoDesbloqueada ? 'auto' : 'none'
+
 if (negocioActual.pin_seguridad && !infoDesbloqueada) toggleInfoSensible(false)
 
   lucide.createIcons()
@@ -998,7 +1005,7 @@ resumen.style.display = 'flex'
         <td onclick="toggleDetalle('${v.id}')">$${Number(v.total).toLocaleString('es-AR')}</td>
         <td style="display:flex; gap:6px">
   <button class="btn-gris" style="padding:6px 10px" onclick="verTicketHistorial('${v.id}')"><i data-lucide="receipt" style="width:14px;height:14px"></i></button>
-  <button class="btn-gris" style="padding:6px 10px" onclick="editarFechaVenta('${v.id}', '${v.fecha}')"><i data-lucide="calendar" style="width:14px;height:14px"></i></button>
+  <button class="btn-editar" style="padding:6px 10px" onclick="editarVenta('${v.id}', '${v.cliente || ''}', '${v.metodo_pago}', '${v.fecha}')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
   <button class="btn-rojo" onclick="confirmarEliminarVenta('${v.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
 </td>
       </tr>
@@ -1549,6 +1556,8 @@ inputStock.style.opacity = alertasActivas ? '1' : '0.4'
 inputStock.style.cursor = alertasActivas ? 'auto' : 'not-allowed'
   document.getElementById('ajustes-pin').value = negocioActual.pin_seguridad ? '****' : ''
 
+  cargarCuotasAjustes()
+
   if (negocioActual.logo_url) {
     document.getElementById('logo-preview').src = negocioActual.logo_url
     document.getElementById('logo-preview').style.display = 'block'
@@ -1559,6 +1568,92 @@ inputStock.style.cursor = alertasActivas ? 'auto' : 'not-allowed'
     document.getElementById('sidebar').classList.remove('mobile-abierto')
     document.getElementById('sidebar-overlay').classList.remove('visible')
   }
+
+  // ── CUOTAS CONFIG ──
+function cargarCuotasAjustes() {
+  const cuotas = negocioActual.cuotas_config || []
+  const lista = document.getElementById('cuotas-lista')
+  if (!lista) return
+
+  if (cuotas.length === 0) {
+    // Cargar cuotas por defecto
+    const cuotasDefault = [
+      { cuotas: 1, porcentaje: 0, label: '1 cuota' },
+      { cuotas: 3, porcentaje: 15, label: '3 cuotas' },
+      { cuotas: 6, porcentaje: 28, label: '6 cuotas' },
+      { cuotas: 12, porcentaje: 55, label: '12 cuotas' },
+      { cuotas: 18, porcentaje: 75, label: '18 cuotas' },
+      { cuotas: 24, porcentaje: 95, label: '24 cuotas' },
+    ]
+    renderizarCuotasAjustes(cuotasDefault)
+  } else {
+    renderizarCuotasAjustes(cuotas)
+  }
+}
+
+function renderizarCuotasAjustes(cuotas) {
+  const lista = document.getElementById('cuotas-lista')
+  lista.innerHTML = cuotas.map((c, i) => `
+    <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:center">
+      <input type="text" value="${c.label}" placeholder="Ej: 3 cuotas" 
+        style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px"
+        onchange="actualizarCuota(${i}, 'label', this.value)" />
+      <div style="display:flex; align-items:center; gap:4px">
+        <input type="number" value="${c.porcentaje}" placeholder="%" min="0"
+          style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px; width:100%"
+          onchange="actualizarCuota(${i}, 'porcentaje', this.value)" />
+        <span style="font-size:13px; color:var(--texto-suave)">%</span>
+      </div>
+      <button onclick="eliminarCuota(${i})" style="background:#fee2e2; border:none; border-radius:8px; padding:8px 10px; cursor:pointer; color:#dc2626">
+        <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+  `).join('')
+  lucide.createIcons()
+}
+
+let cuotasTemp = []
+
+function actualizarCuota(i, campo, valor) {
+  if (!cuotasTemp.length) cuotasTemp = negocioActual.cuotas_config || []
+  cuotasTemp[i][campo] = campo === 'porcentaje' ? parseFloat(valor) : valor
+}
+
+function eliminarCuota(i) {
+  cuotasTemp = negocioActual.cuotas_config?.length ? [...negocioActual.cuotas_config] : []
+  cuotasTemp.splice(i, 1)
+  renderizarCuotasAjustes(cuotasTemp)
+}
+
+document.getElementById('btn-agregar-cuota').addEventListener('click', () => {
+  if (!cuotasTemp.length) cuotasTemp = negocioActual.cuotas_config ? [...negocioActual.cuotas_config] : []
+  cuotasTemp.push({ cuotas: 0, porcentaje: 0, label: 'Nueva cuota' })
+  renderizarCuotasAjustes(cuotasTemp)
+})
+
+document.getElementById('btn-guardar-cuotas').addEventListener('click', async () => {
+  const inputs = document.querySelectorAll('#cuotas-lista input[type="text"]')
+  const inputsNum = document.querySelectorAll('#cuotas-lista input[type="number"]')
+  
+  const cuotasGuardar = Array.from(inputs).map((input, i) => ({
+    label: input.value,
+    porcentaje: parseFloat(inputsNum[i].value) || 0
+  }))
+
+  const { error } = await db.from('negocios').update({ cuotas_config: cuotasGuardar }).eq('id', negocioActual.id)
+
+  const msg = document.getElementById('ajustes-mensaje-cuotas')
+  if (error) {
+    msg.style.color = '#dc2626'
+    msg.textContent = 'Error al guardar'
+    return
+  }
+
+  negocioActual.cuotas_config = cuotasGuardar
+  cuotasTemp = []
+  msg.style.color = 'var(--verde)'
+  msg.textContent = 'Cuotas guardadas!'
+})
 
   lucide.createIcons()
 })
@@ -2145,10 +2240,12 @@ const rubro = rubros[negocioActual.rubro] || negocioActual.rubro || ''
 
 document.getElementById('btn-cerrar-ticket').addEventListener('click', () => {
   document.getElementById('modal-ticket').style.display = 'none'
+  limpiarVenta()
 })
 
 document.getElementById('btn-cerrar-ticket-2').addEventListener('click', () => {
   document.getElementById('modal-ticket').style.display = 'none'
+  limpiarVenta()
 })
 
 document.getElementById('btn-imprimir-ticket').addEventListener('click', () => {
@@ -3399,6 +3496,121 @@ document.getElementById('btn-confirmar-eliminar-producto').addEventListener('cli
   productoAEliminar = null
   mostrarToast('Producto eliminado!')
   cargarProductos()
+})
+
+function limpiarVenta() {
+  itemsVenta = []
+  renderizarItemsVenta()
+  document.getElementById('venta-efectivo').value = ''
+  document.getElementById('vuelto-box').style.display = 'none'
+  document.getElementById('venta-cliente').value = ''
+  document.getElementById('descuento-valor').value = ''
+  document.getElementById('resumen-tipo-precio').textContent = ''
+  const ahora = new Date()
+  const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  document.getElementById('venta-fecha').value = fechaLocal
+}
+
+// ── EDITAR VENTA ──
+let ventaEditando = null
+
+function editarVenta(id, cliente, metodo, fecha) {
+  ventaEditando = id
+  document.getElementById('editar-venta-cliente').value = cliente
+  document.getElementById('editar-venta-metodo').value = metodo
+  const fechaObj = new Date(fecha)
+  const fechaLocal = new Date(fechaObj.getTime() - fechaObj.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 16)
+  document.getElementById('editar-venta-fecha').value = fechaLocal
+  document.getElementById('modal-editar-venta').style.display = 'flex'
+  lucide.createIcons()
+}
+
+document.getElementById('btn-cerrar-editar-venta').addEventListener('click', () => {
+  document.getElementById('modal-editar-venta').style.display = 'none'
+  ventaEditando = null
+})
+
+document.getElementById('btn-cancelar-editar-venta').addEventListener('click', () => {
+  document.getElementById('modal-editar-venta').style.display = 'none'
+  ventaEditando = null
+})
+
+document.getElementById('btn-guardar-editar-venta').addEventListener('click', async () => {
+  if (!ventaEditando) return
+
+  const cliente = document.getElementById('editar-venta-cliente').value.trim() || null
+  const metodo = document.getElementById('editar-venta-metodo').value
+  const fechaInput = document.getElementById('editar-venta-fecha').value
+  const fecha = fechaInput ? new Date(fechaInput).toISOString() : null
+
+  const { error } = await db.from('ventas').update({
+    cliente,
+    metodo_pago: metodo,
+    fecha
+  }).eq('id', ventaEditando)
+
+  if (error) {
+    mostrarToast('Error al guardar los cambios', 'error')
+    return
+  }
+
+  document.getElementById('modal-editar-venta').style.display = 'none'
+  ventaEditando = null
+  mostrarToast('Venta actualizada!')
+  cargarHistorial()
+})
+
+// ── CALCULADORA TARJETA ──
+document.getElementById('btn-calculadora-tarjeta').addEventListener('click', () => {
+  const totalActual = itemsVenta.reduce((acc, i) => acc + i.precio * i.cantidad, 0)
+  const descuentoValor = parseFloat(document.getElementById('descuento-valor').value) || 0
+  const descuentoTipo = document.getElementById('descuento-tipo').value
+  const descuento = descuentoTipo === 'porcentaje' ? totalActual * (descuentoValor / 100) : descuentoValor
+  const totalConDescuento = Math.max(0, totalActual - descuento)
+
+  document.getElementById('calc-monto').value = totalConDescuento || ''
+  calcularCuotas()
+  document.getElementById('modal-calculadora').style.display = 'flex'
+  lucide.createIcons()
+})
+
+document.getElementById('calc-monto').addEventListener('input', calcularCuotas)
+
+function calcularCuotas() {
+  const monto = parseFloat(document.getElementById('calc-monto').value) || 0
+  const cuotas = negocioActual.cuotas_config || []
+  const resultados = document.getElementById('calc-resultados')
+
+  if (cuotas.length === 0) {
+    resultados.innerHTML = '<p style="color:var(--texto-suave); font-size:13px">No hay cuotas configuradas. Configuralas en Ajustes.</p>'
+    return
+  }
+
+  resultados.innerHTML = cuotas.map(c => {
+    const total = monto * (1 + c.porcentaje / 100)
+    const cuotaValor = c.porcentaje > 0 ? total / (parseInt(c.label) || 1) : total
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--fondo); border-radius:8px; border:1px solid var(--borde)">
+        <div>
+          <div style="font-size:14px; font-weight:600; color:var(--texto)">${c.label}</div>
+          <div style="font-size:12px; color:var(--texto-suave)">${c.porcentaje > 0 ? `+${c.porcentaje}% recargo` : 'Sin recargo'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:16px; font-weight:bold; color:var(--verde)">$${Math.round(total).toLocaleString('es-AR')}</div>
+          ${c.porcentaje > 0 ? `<div style="font-size:12px; color:var(--texto-suave)">$${Math.round(cuotaValor).toLocaleString('es-AR')} x cuota</div>` : ''}
+        </div>
+      </div>
+    `
+  }).join('')
+}
+
+document.getElementById('btn-cerrar-calculadora').addEventListener('click', () => {
+  document.getElementById('modal-calculadora').style.display = 'none'
+})
+
+document.getElementById('btn-cerrar-calculadora-2').addEventListener('click', () => {
+  document.getElementById('modal-calculadora').style.display = 'none'
 })
 
 lucide.createIcons()
