@@ -263,6 +263,13 @@
   <input type="text" id="buscador-productos" placeholder="Buscar por nombre o código..." />
 </div>
 
+<!-- CARD VALOR INVENTARIO -->
+<div class="card info-sensible" id="card-valor-inventario" style="margin-bottom:16px; filter:${infoDesbloqueada ? 'none' : 'blur(4px)'}; user-select:${infoDesbloqueada ? 'auto' : 'none'}; max-width:300px">
+  <i data-lucide="package" class="card-icon"></i>
+  <span class="card-label">Valor total del inventario</span>
+  <span class="card-valor" id="valor-inventario-total">$0</span>
+</div>
+
 <!-- PILLS DE CATEGORÍAS -->
 <div id="categorias-pills" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px"></div>
 
@@ -485,6 +492,10 @@
             <span id="venta-vuelto" class="vuelto-valor">$0</span>
           </div>
         </div>
+
+        <button class="btn-gris" id="btn-calculadora-tarjeta" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px">
+  <i data-lucide="calculator" style="width:15px;height:15px"></i> Calcular precio con tarjeta
+</button>
 
         <button class="btn-verde" id="btn-confirmar-venta" style="width:100%; margin-top:8px; justify-content:center;">
           <i data-lucide="check"></i> Confirmar venta
@@ -958,6 +969,26 @@
       <p id="ajustes-mensaje-precios" style="font-size:13px; text-align:center; min-height:18px"></p>
     </div>
 
+    <!-- CARD CUOTAS -->
+<div class="ajuste-card">
+  <h3 class="ajuste-card-titulo">
+    <i data-lucide="credit-card" style="width:18px;height:18px"></i>
+    Configuración de cuotas
+  </h3>
+  <p style="font-size:13px; color:var(--texto-suave)">Configurá los recargos por cuotas y gastos impositivos para calcular el precio final con tarjeta.</p>
+  
+  <div id="cuotas-lista" style="display:flex; flex-direction:column; gap:8px"></div>
+  
+  <button class="btn-gris" id="btn-agregar-cuota" style="display:flex; align-items:center; gap:6px; margin-top:4px">
+    <i data-lucide="plus" style="width:15px;height:15px"></i> Agregar plan de cuotas
+  </button>
+
+  <button class="btn-verde" id="btn-guardar-cuotas" style="justify-content:center; margin-top:8px">
+    <i data-lucide="check" style="width:15px;height:15px"></i> Guardar cuotas
+  </button>
+  <p id="ajustes-mensaje-cuotas" style="font-size:13px; text-align:center; min-height:18px"></p>
+</div>
+
   </div>
 </div>
 
@@ -1314,6 +1345,65 @@
     <div class="modal-footer">
       <button class="btn-gris" id="btn-cancelar-eliminar-producto">Cancelar</button>
       <button class="btn-rojo" id="btn-confirmar-eliminar-producto" style="padding:10px 18px; font-size:14px">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR VENTA -->
+<div class="modal-overlay" id="modal-editar-venta" style="display:none">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <h3>Editar venta</h3>
+      <button class="btn-cerrar" id="btn-cerrar-editar-venta">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="campo">
+        <label>Cliente</label>
+        <input type="text" id="editar-venta-cliente" placeholder="Nombre del cliente" />
+      </div>
+      <div class="campo">
+        <label>Método de pago</label>
+        <select id="editar-venta-metodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="debito">Débito</option>
+          <option value="credito">Crédito</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Fecha y hora</label>
+        <input type="datetime-local" id="editar-venta-fecha" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-editar-venta">Cancelar</button>
+      <button class="btn-verde" id="btn-guardar-editar-venta" style="justify-content:center">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CALCULADORA TARJETA -->
+<div class="modal-overlay" id="modal-calculadora" style="display:none">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>Calculadora de cuotas</h3>
+      <button class="btn-cerrar" id="btn-cerrar-calculadora">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="gap:16px">
+      <div class="campo">
+        <label>Monto base</label>
+        <input type="number" id="calc-monto" placeholder="Ej: 10000" />
+      </div>
+      <div id="calc-resultados" style="display:flex; flex-direction:column; gap:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cerrar-calculadora-2">Cerrar</button>
     </div>
   </div>
 </div>
