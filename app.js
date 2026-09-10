@@ -863,13 +863,18 @@ const fechaVenta = fechaInput ? new Date(fechaInput).toISOString() : new Date().
 
   const proximoTicket = (ultimaVenta?.numero_ticket || 0) + 1
 
+  const descuentoAplicado = descuentoTipo === 'porcentaje' 
+    ? subtotal * (descuentoValor / 100) 
+    : descuentoValor
+
   const { data: venta, error } = await db.from('ventas').insert({
     negocio_id: negocioActual.id,
     total,
     metodo_pago: metodo,
     cliente,
     fecha: fechaVenta,
-    numero_ticket: proximoTicket
+    numero_ticket: proximoTicket,
+    descuento: descuentoAplicado
   }).select().single()
 
   if (error) {
@@ -877,15 +882,12 @@ const fechaVenta = fechaInput ? new Date(fechaInput).toISOString() : new Date().
     return
   }
 
-  const subtotalSinDescuento = itemsVenta.reduce((acc, i) => acc + i.precio_base * i.cantidad, 0)
-  const factorDescuento = subtotalSinDescuento > 0 ? total / subtotalSinDescuento : 1
-
   await db.from('venta_items').insert(
     itemsVenta.map(i => ({
       venta_id: venta.id,
       producto_id: i.id,
       nombre_producto: i.nombre,
-      precio_unitario: Math.round(i.precio * factorDescuento),
+      precio_unitario: i.precio,
       cantidad: i.cantidad,
       codigo: i.codigo || null
     }))
@@ -1072,48 +1074,59 @@ async function toggleDetalle(ventaId) {
   fila.style.display = 'table-row'
   flecha.classList.add('abierto')
 
-  const { data: items } = await db
-    .from('venta_items')
-    .select('*')
-    .eq('venta_id', ventaId)
+  const [{ data: items }, { data: venta }] = await Promise.all([
+    db.from('venta_items').select('*').eq('venta_id', ventaId),
+    db.from('ventas').select('*').eq('id', ventaId).single()
+  ])
 
   if (!items || items.length === 0) {
     contenido.innerHTML = '<p style="color:var(--texto-suave); font-size:13px">Sin detalle</p>'
     return
   }
 
-  const totalVenta = items.reduce((acc, i) => acc + (i.precio_unitario * i.cantidad), 0)
+  const totalItems = items.reduce((acc, i) => acc + (i.precio_unitario * i.cantidad), 0)
 
-contenido.innerHTML = `
-  <table style="width:100%; border-collapse:collapse; font-size:13px">
-    <thead>
-      <tr style="border-bottom:1px solid var(--borde)">
-        <th style="padding:8px 12px; text-align:left; color:var(--texto-suave); font-weight:600">PLU</th>
-        <th style="padding:8px 12px; text-align:left; color:var(--texto-suave); font-weight:600">PRODUCTO</th>
-        <th style="padding:8px 12px; text-align:center; color:var(--texto-suave); font-weight:600">CANT.</th>
-        <th style="padding:8px 12px; text-align:right; color:var(--texto-suave); font-weight:600">PRECIO</th>
-        <th style="padding:8px 12px; text-align:right; color:var(--texto-suave); font-weight:600">SUBTOTAL</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${items.map(i => `
+  contenido.innerHTML = `
+    <table style="width:100%; border-collapse:collapse; font-size:13px">
+      <thead>
         <tr style="border-bottom:1px solid var(--borde)">
-          <td style="padding:10px 12px; color:var(--verde); font-weight:600">${i.codigo || '-'}</td>
-          <td style="padding:10px 12px; color:var(--texto)">${i.nombre_producto}</td>
-          <td style="padding:10px 12px; text-align:center; color:var(--texto)">${i.cantidad}</td>
-          <td style="padding:10px 12px; text-align:right; color:var(--texto)">$${Number(i.precio_unitario).toLocaleString('es-AR')}</td>
-          <td style="padding:10px 12px; text-align:right; color:var(--verde); font-weight:600">$${Number(i.precio_unitario * i.cantidad).toLocaleString('es-AR')}</td>
+          <th style="padding:8px 12px; text-align:left; color:var(--texto-suave); font-weight:600">PLU</th>
+          <th style="padding:8px 12px; text-align:left; color:var(--texto-suave); font-weight:600">PRODUCTO</th>
+          <th style="padding:8px 12px; text-align:center; color:var(--texto-suave); font-weight:600">CANT.</th>
+          <th style="padding:8px 12px; text-align:right; color:var(--texto-suave); font-weight:600">PRECIO</th>
+          <th style="padding:8px 12px; text-align:right; color:var(--texto-suave); font-weight:600">SUBTOTAL</th>
         </tr>
-      `).join('')}
-    </tbody>
-    <tfoot>
-      <tr style="border-top:2px solid var(--borde)">
-        <td colspan="4" style="padding:10px 12px; text-align:right; font-weight:600; color:var(--texto-suave)">TOTAL</td>
-        <td style="padding:10px 12px; text-align:right; font-weight:bold; font-size:15px; color:var(--verde)">$${Number(totalVenta).toLocaleString('es-AR')}</td>
-      </tr>
-    </tfoot>
-  </table>
-`
+      </thead>
+      <tbody>
+        ${items.map(i => `
+          <tr style="border-bottom:1px solid var(--borde)">
+            <td style="padding:10px 12px; color:var(--verde); font-weight:600">${i.codigo || '-'}</td>
+            <td style="padding:10px 12px; color:var(--texto)">${i.nombre_producto}</td>
+            <td style="padding:10px 12px; text-align:center; color:var(--texto)">${i.cantidad}</td>
+            <td style="padding:10px 12px; text-align:right; color:var(--texto)">$${Number(i.precio_unitario).toLocaleString('es-AR')}</td>
+            <td style="padding:10px 12px; text-align:right; color:var(--verde); font-weight:600">$${Number(i.precio_unitario * i.cantidad).toLocaleString('es-AR')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+      <tfoot>
+  ${venta?.descuento > 0 ? `
+  <tr>
+    <td colspan="4" style="padding:6px 12px; text-align:right; color:#dc2626">Descuento</td>
+    <td style="padding:6px 12px; text-align:right; color:#dc2626">-$${Number(venta.descuento).toLocaleString('es-AR')}</td>
+  </tr>
+  <tr style="border-top:2px solid var(--borde)">
+    <td colspan="4" style="padding:10px 12px; text-align:right; font-weight:600; color:var(--texto-suave)">TOTAL</td>
+    <td style="padding:10px 12px; text-align:right; font-weight:bold; font-size:15px; color:var(--verde)">$${Number(venta.total).toLocaleString('es-AR')}</td>
+  </tr>
+  ` : `
+  <tr style="border-top:2px solid var(--borde)">
+    <td colspan="4" style="padding:10px 12px; text-align:right; font-weight:600; color:var(--texto-suave)">TOTAL</td>
+    <td style="padding:10px 12px; text-align:right; font-weight:bold; font-size:15px; color:var(--verde)">$${Number(totalItems).toLocaleString('es-AR')}</td>
+  </tr>
+  `}
+</tfoot>
+    </table>
+  `
 }
 
 // ── CAJA ──
@@ -1594,19 +1607,19 @@ function cargarCuotasAjustes() {
 function renderizarCuotasAjustes(cuotas) {
   const lista = document.getElementById('cuotas-lista')
   lista.innerHTML = cuotas.map((c, i) => `
-    <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:center">
+    <div style="display:grid; grid-template-columns:1fr 90px 38px; gap:8px; align-items:center; width:100%">
       <input type="text" value="${c.label}" placeholder="Ej: 3 cuotas" 
         style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px"
         onchange="actualizarCuota(${i}, 'label', this.value)" />
       <div style="display:flex; align-items:center; gap:4px">
         <input type="number" value="${c.porcentaje}" placeholder="%" min="0"
-          style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px; width:100%"
+  style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px; width:80px; min-width:80px"
           onchange="actualizarCuota(${i}, 'porcentaje', this.value)" />
         <span style="font-size:13px; color:var(--texto-suave)">%</span>
       </div>
-      <button onclick="eliminarCuota(${i})" style="background:#fee2e2; border:none; border-radius:8px; padding:8px 10px; cursor:pointer; color:#dc2626">
-        <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-      </button>
+      <button onclick="eliminarCuota(${i})" style="background:#fee2e2; border:none; border-radius:8px; padding:8px 10px; cursor:pointer; color:#dc2626; flex-shrink:0">
+  <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+</button>
     </div>
   `).join('')
   lucide.createIcons()
