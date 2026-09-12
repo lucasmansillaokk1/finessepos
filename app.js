@@ -369,7 +369,6 @@ const productosBajoStock = data.filter(p => p.stock <= umbralStock)
 </td>
     <td>${p.categoria || '-'}</td>
     <td class="acciones">
-  <button class="btn-gris" style="padding:6px 10px" onclick="abrirAjusteStock('${p.id}', '${p.nombre}', ${p.stock})"><i data-lucide="package" style="width:14px;height:14px"></i></button>
   ${p.codigo ? `<button class="btn-gris" style="padding:6px 10px" onclick="abrirCodigoOPremium('${p.id}', '${p.nombre}', ${p.precio}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0}, '${p.codigo}')"><i data-lucide="barcode" style="width:14px;height:14px"></i></button>` : ''}
   <button class="btn-editar" onclick="abrirEditar('${p.id}', '${p.nombre}', ${p.precio}, ${p.stock}, '${p.categoria || ''}', '${p.codigo || ''}', ${p.costo || 0}, ${p.precio_mayor || 0}, ${p.precio_revendedor || 0})">Editar</button>
   <button class="btn-rojo" onclick="eliminarProducto('${p.id}')">Eliminar</button>
@@ -1020,6 +1019,14 @@ resumen.style.display = 'flex'
       </tr>
     `
   }).join('')
+
+  if (negocioActual.pin_seguridad && !infoDesbloqueada) {
+  document.querySelectorAll('#tabla-historial .btn-rojo, #tabla-historial .btn-editar').forEach(btn => {
+    btn.disabled = true
+    btn.style.opacity = '0.3'
+    btn.style.cursor = 'not-allowed'
+  })
+}
 
   lucide.createIcons()
 }
@@ -1894,6 +1901,13 @@ document.querySelectorAll('#tabla-productos .acciones button').forEach(btn => {
   btn.style.opacity = mostrar ? '1' : '0.3'
   btn.style.cursor = mostrar ? 'pointer' : 'not-allowed'
 })
+// BLOQUEAR/DESBLOQUEAR BOTONES EN HISTORIAL
+document.querySelectorAll('#tabla-historial .btn-rojo, #tabla-historial .btn-editar').forEach(btn => {
+  btn.disabled = !mostrar
+  btn.style.opacity = mostrar ? '1' : '0.3'
+  btn.style.cursor = mostrar ? 'pointer' : 'not-allowed'
+})
+
   const btn = document.getElementById('btn-toggle-pin')
   if (btn) {
     btn.innerHTML = mostrar
@@ -2304,7 +2318,56 @@ document.getElementById('reporte-mes').addEventListener('click', () => {
   setFechasReporte(inicioMes, hoy.toISOString().split('T')[0])
 })
 
+// ── GENERAR REPORTE ──
 document.getElementById('btn-generar-reporte').addEventListener('click', async () => {
+  if (negocioActual.pin_seguridad && !infoDesbloqueada) {
+    document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+    document.getElementById('pin-error').textContent = ''
+    document.getElementById('modal-pin').style.display = 'flex'
+    document.querySelectorAll('.pin-input')[0].focus()
+
+    const btnConfirmar = document.getElementById('btn-confirmar-pin')
+    btnConfirmar.onclick = () => {
+      const pinIngresado = Array.from(document.querySelectorAll('.pin-input')).map(i => i.value).join('')
+      if (pinIngresado.length < 4) {
+        document.getElementById('pin-error').textContent = 'Ingresá los 4 dígitos'
+        return
+      }
+      if (pinIngresado === negocioActual.pin_seguridad) {
+        intentosFallidosPin = 0
+        document.getElementById('modal-pin').style.display = 'none'
+        toggleInfoSensible(true)
+        generarReporte()
+      } else {
+        intentosFallidosPin++
+        if (intentosFallidosPin >= MAX_INTENTOS_PIN) {
+          document.getElementById('modal-pin').style.display = 'none'
+          intentosFallidosPin = 0
+          mostrarToast('PIN bloqueado por 3 intentos fallidos. Esperá 30 segundos.', 'error')
+          const btnCandado = document.getElementById('btn-toggle-pin')
+          if (btnCandado) {
+            btnCandado.disabled = true
+            btnCandado.style.opacity = '0.3'
+            setTimeout(() => {
+              btnCandado.disabled = false
+              btnCandado.style.opacity = '1'
+              intentosFallidosPin = 0
+            }, 30000)
+          }
+        } else {
+          document.getElementById('pin-error').textContent = `PIN incorrecto. Te quedan ${MAX_INTENTOS_PIN - intentosFallidosPin} intento${MAX_INTENTOS_PIN - intentosFallidosPin === 1 ? '' : 's'}`
+          document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+          document.querySelectorAll('.pin-input')[0].focus()
+        }
+      }
+    }
+    lucide.createIcons()
+    return
+  }
+  generarReporte()
+})
+
+async function generarReporte() {
   const desde = document.getElementById('reporte-desde').value
   const hasta = document.getElementById('reporte-hasta').value
 
@@ -2333,7 +2396,6 @@ document.getElementById('btn-generar-reporte').addEventListener('click', async (
   document.getElementById('reporte-transacciones').textContent = ventas.length
   document.getElementById('reporte-ticket').textContent = '$' + Math.round(ticketPromedio).toLocaleString('es-AR')
 
-  // MÉTODOS DE PAGO
   const metodos = {}
   ventas.forEach(v => {
     metodos[v.metodo_pago] = (metodos[v.metodo_pago] || 0) + Number(v.total)
@@ -2343,8 +2405,8 @@ document.getElementById('btn-generar-reporte').addEventListener('click', async (
   document.getElementById('reporte-metodos').innerHTML = Object.entries(metodos)
     .sort((a, b) => b[1] - a[1])
     .map(([nombre, monto]) => `
-  <div class="metodo-fila metodo-venta-fila">
-    <span class="metodo-nombre">${nombre}</span>
+      <div class="metodo-fila metodo-venta-fila">
+        <span class="metodo-nombre">${nombre}</span>
         <div class="metodo-barra-wrapper">
           <div class="metodo-barra" style="width:${(monto/maxMetodo*100).toFixed(0)}%"></div>
         </div>
@@ -2352,7 +2414,6 @@ document.getElementById('btn-generar-reporte').addEventListener('click', async (
       </div>
     `).join('')
 
-  // TOP PRODUCTOS + GANANCIA
   const ventaIds = ventas.map(v => v.id)
   const { data: items } = await db
     .from('venta_items')
@@ -2391,40 +2452,160 @@ document.getElementById('btn-generar-reporte').addEventListener('click', async (
       </div>
     `).join('')
 
-    // EGRESOS POR CATEGORÍA
-const { data: egresosPeriodo } = await db
-  .from('caja')
-  .select('*')
-  .eq('negocio_id', negocioActual.id)
-  .eq('tipo', 'egreso')
-  .gte('fecha', desde + 'T00:00:00')
-  .lte('fecha', hasta + 'T23:59:59')
+  // EGRESOS POR CATEGORÍA
+  const { data: egresosPeriodo } = await db
+    .from('caja')
+    .select('*')
+    .eq('negocio_id', negocioActual.id)
+    .eq('tipo', 'egreso')
+    .gte('fecha', desde + 'T00:00:00')
+    .lte('fecha', hasta + 'T23:59:59')
 
-const categorias = {}
-;(egresosPeriodo || []).forEach(e => {
-  const cat = e.categoria || 'otros'
-  categorias[cat] = (categorias[cat] || 0) + Number(e.monto)
-})
+  const categorias = {}
+  ;(egresosPeriodo || []).forEach(e => {
+    const cat = e.categoria || 'otros'
+    categorias[cat] = (categorias[cat] || 0) + Number(e.monto)
+  })
 
-const totalEgresosPeriodo = Object.values(categorias).reduce((acc, v) => acc + v, 0)
+  const totalEgresosPeriodo = Object.values(categorias).reduce((acc, v) => acc + v, 0)
 
-document.getElementById('reporte-egresos').innerHTML = Object.keys(categorias).length === 0
-  ? '<p style="color:var(--texto-suave); font-size:14px">Sin egresos en este período</p>'
-  : Object.entries(categorias)
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat, monto]) => `
-  <div class="metodo-fila metodo-egreso-fila">
-    <span class="metodo-nombre" style="text-transform:capitalize">${cat}</span>
-        <div class="metodo-barra-wrapper">
-          <div class="metodo-barra" style="width:${((monto/totalEgresosPeriodo)*100).toFixed(0)}%; background:#7c3aed"></div>
+  document.getElementById('reporte-egresos').innerHTML = Object.keys(categorias).length === 0
+    ? '<p style="color:var(--texto-suave); font-size:14px">Sin egresos en este período</p>'
+    : Object.entries(categorias)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, monto]) => `
+        <div class="metodo-fila metodo-egreso-fila">
+          <span class="metodo-nombre" style="text-transform:capitalize">${cat}</span>
+          <div class="metodo-barra-wrapper">
+            <div class="metodo-barra" style="width:${((monto/totalEgresosPeriodo)*100).toFixed(0)}%; background:#7c3aed"></div>
+          </div>
+          <span class="metodo-monto" style="color:#7c3aed">$${monto.toLocaleString('es-AR')}</span>
         </div>
-        <span class="metodo-monto" style="color:#7c3aed">$${monto.toLocaleString('es-AR')}</span>
-      </div>
-    `).join('')
+      `).join('')
 
   document.getElementById('reporte-resultado').style.display = 'block'
   lucide.createIcons()
-})
+}
+
+async function generarReporte() {
+  const desde = document.getElementById('reporte-desde').value
+  const hasta = document.getElementById('reporte-hasta').value
+
+  if (!desde || !hasta) {
+    mostrarToast('Seleccioná un período', 'error')
+    return
+  }
+
+  const { data: ventas } = await db
+    .from('ventas')
+    .select('*')
+    .eq('negocio_id', negocioActual.id)
+    .gte('fecha', desde + 'T00:00:00')
+    .lte('fecha', hasta + 'T23:59:59')
+
+  if (!ventas || ventas.length === 0) {
+    mostrarToast('No hay ventas en ese período', 'error')
+    document.getElementById('reporte-resultado').style.display = 'none'
+    return
+  }
+
+  const totalVentas = ventas.reduce((acc, v) => acc + Number(v.total), 0)
+  const ticketPromedio = totalVentas / ventas.length
+
+  document.getElementById('reporte-total').textContent = '$' + totalVentas.toLocaleString('es-AR')
+  document.getElementById('reporte-transacciones').textContent = ventas.length
+  document.getElementById('reporte-ticket').textContent = '$' + Math.round(ticketPromedio).toLocaleString('es-AR')
+
+  const metodos = {}
+  ventas.forEach(v => {
+    metodos[v.metodo_pago] = (metodos[v.metodo_pago] || 0) + Number(v.total)
+  })
+
+  const maxMetodo = Math.max(...Object.values(metodos))
+  document.getElementById('reporte-metodos').innerHTML = Object.entries(metodos)
+    .sort((a, b) => b[1] - a[1])
+    .map(([nombre, monto]) => `
+      <div class="metodo-fila metodo-venta-fila">
+        <span class="metodo-nombre">${nombre}</span>
+        <div class="metodo-barra-wrapper">
+          <div class="metodo-barra" style="width:${(monto/maxMetodo*100).toFixed(0)}%"></div>
+        </div>
+        <span class="metodo-monto">$${monto.toLocaleString('es-AR')}</span>
+      </div>
+    `).join('')
+
+  const ventaIds = ventas.map(v => v.id)
+  const { data: items } = await db
+    .from('venta_items')
+    .select('*, productos(costo)')
+    .in('venta_id', ventaIds)
+
+  const resumen = {}
+  let gananciaTotal = 0
+
+  ;(items || []).forEach(i => {
+    const costo = i.productos?.costo || 0
+    const ganancia = (i.precio_unitario - costo) * i.cantidad
+    gananciaTotal += ganancia
+
+    if (!resumen[i.nombre_producto]) {
+      resumen[i.nombre_producto] = { cantidad: 0, total: 0 }
+    }
+    resumen[i.nombre_producto].cantidad += i.cantidad
+    resumen[i.nombre_producto].total += i.precio_unitario * i.cantidad
+  })
+
+  document.getElementById('reporte-ganancia').textContent = '$' + Math.round(gananciaTotal).toLocaleString('es-AR')
+
+  const top = Object.entries(resumen)
+    .sort((a, b) => b[1].cantidad - a[1].cantidad)
+    .slice(0, 5)
+
+  document.getElementById('reporte-top-productos').innerHTML = top.length === 0
+    ? '<p style="color:var(--texto-suave); font-size:14px">Sin datos</p>'
+    : top.map(([nombre, datos], i) => `
+      <div class="top-producto-item">
+        <div class="top-producto-rank">${i + 1}</div>
+        <div class="top-producto-nombre">${nombre}</div>
+        <div class="top-producto-cantidad">${datos.cantidad} uds</div>
+        <div class="top-producto-total">$${Number(datos.total).toLocaleString('es-AR')}</div>
+      </div>
+    `).join('')
+
+  // EGRESOS POR CATEGORÍA
+  const { data: egresosPeriodo } = await db
+    .from('caja')
+    .select('*')
+    .eq('negocio_id', negocioActual.id)
+    .eq('tipo', 'egreso')
+    .gte('fecha', desde + 'T00:00:00')
+    .lte('fecha', hasta + 'T23:59:59')
+
+  const categorias = {}
+  ;(egresosPeriodo || []).forEach(e => {
+    const cat = e.categoria || 'otros'
+    categorias[cat] = (categorias[cat] || 0) + Number(e.monto)
+  })
+
+  const totalEgresosPeriodo = Object.values(categorias).reduce((acc, v) => acc + v, 0)
+
+  document.getElementById('reporte-egresos').innerHTML = Object.keys(categorias).length === 0
+    ? '<p style="color:var(--texto-suave); font-size:14px">Sin egresos en este período</p>'
+    : Object.entries(categorias)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, monto]) => `
+        <div class="metodo-fila metodo-egreso-fila">
+          <span class="metodo-nombre" style="text-transform:capitalize">${cat}</span>
+          <div class="metodo-barra-wrapper">
+            <div class="metodo-barra" style="width:${((monto/totalEgresosPeriodo)*100).toFixed(0)}%; background:#7c3aed"></div>
+          </div>
+          <span class="metodo-monto" style="color:#7c3aed">$${monto.toLocaleString('es-AR')}</span>
+        </div>
+      `).join('')
+
+  document.getElementById('reporte-resultado').style.display = 'block'
+  lucide.createIcons()
+}
 
 // ── DESCARGAR PDF TICKET ──
 document.getElementById('btn-descargar-pdf').addEventListener('click', () => {
