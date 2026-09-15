@@ -1561,7 +1561,6 @@ document.getElementById('btn-abrir-ajustes').addEventListener('click', () => {
 
   document.getElementById('ajustes-nombre').value = negocioActual.nombre
   document.getElementById('ajustes-rubro').value = negocioActual.rubro
-  document.getElementById('ajustes-instagram').value = negocioActual.instagram || ''
   document.getElementById('ajustes-direccion').value = negocioActual.direccion || ''
   document.getElementById('ajustes-telefono').value = negocioActual.telefono || ''
   document.getElementById('ajustes-email').value = usuarioActual.email || ''
@@ -1682,7 +1681,6 @@ document.getElementById('btn-guardar-cuotas').addEventListener('click', async ()
 document.getElementById('btn-guardar-info-negocio').addEventListener('click', async () => {
   const nombre = document.getElementById('ajustes-nombre').value.trim()
   const rubro = document.getElementById('ajustes-rubro').value
-  const instagram = document.getElementById('ajustes-instagram').value.trim()
 
   if (!nombre) {
     document.getElementById('ajustes-mensaje-info').style.color = '#dc2626'
@@ -1948,22 +1946,48 @@ document.getElementById('btn-guardar-email').addEventListener('click', async () 
 
 // CAMBIAR CONTRASEÑA
 document.getElementById('btn-guardar-password').addEventListener('click', async () => {
+  const msg = document.getElementById('ajustes-mensaje-password')
+
+  // Si hay PIN, pedirlo primero
+  if (negocioActual.pin_seguridad && !infoDesbloqueada) {
+    document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+    document.getElementById('pin-error').textContent = ''
+    document.getElementById('modal-pin').style.display = 'flex'
+    document.querySelectorAll('.pin-input')[0].focus()
+
+    document.getElementById('btn-confirmar-pin').onclick = async () => {
+      const pinIngresado = Array.from(document.querySelectorAll('.pin-input')).map(i => i.value).join('')
+      if (pinIngresado !== negocioActual.pin_seguridad) {
+        document.getElementById('pin-error').textContent = 'PIN incorrecto'
+        document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+        document.querySelectorAll('.pin-input')[0].focus()
+        return
+      }
+      intentosFallidosPin = 0
+      document.getElementById('modal-pin').style.display = 'none'
+      toggleInfoSensible(true)
+      await cambiarPassword(msg)
+    }
+    lucide.createIcons()
+    return
+  }
+  await cambiarPassword(msg)
+})
+
+async function cambiarPassword(msg) {
   const passwordNueva = document.getElementById('ajustes-password-nueva').value
   const passwordConfirmar = document.getElementById('ajustes-password-confirmar').value
-  const msg = document.getElementById('ajustes-mensaje-password')
 
   if (!passwordNueva || !passwordConfirmar) {
     msg.style.color = '#dc2626'
     msg.textContent = 'Completá los dos campos'
     return
   }
-
   if (passwordNueva.length < 6) {
     msg.style.color = '#dc2626'
     msg.textContent = 'La contraseña debe tener al menos 6 caracteres'
     return
   }
-
   if (passwordNueva !== passwordConfirmar) {
     msg.style.color = '#dc2626'
     msg.textContent = 'Las contraseñas no coinciden'
@@ -1971,43 +1995,66 @@ document.getElementById('btn-guardar-password').addEventListener('click', async 
   }
 
   const { error } = await db.auth.updateUser({ password: passwordNueva })
-
   if (error) {
     msg.style.color = '#dc2626'
     msg.textContent = 'Error al cambiar la contraseña'
     return
   }
 
-document.getElementById('ajustes-password-nueva').value = ''
+  document.getElementById('ajustes-password-nueva').value = ''
   document.getElementById('ajustes-password-confirmar').value = ''
   msg.style.color = 'var(--verde)'
   msg.textContent = 'Contraseña actualizada!'
-})
+}
 
 // GUARDAR PIN
 document.getElementById('btn-guardar-pin').addEventListener('click', async () => {
-  const pin = document.getElementById('ajustes-pin').value.trim()
+  const pinNuevo = document.getElementById('ajustes-pin').value.trim()
   const msg = document.getElementById('ajustes-mensaje-password')
 
-  if (pin && (pin.length !== 4 || isNaN(pin))) {
+  if (pinNuevo && (pinNuevo.length !== 4 || isNaN(pinNuevo))) {
     msg.style.color = '#dc2626'
     msg.textContent = 'El PIN debe ser de exactamente 4 dígitos numéricos'
     return
   }
 
-  const { error } = await db.from('negocios').update({ pin_seguridad: pin || null }).eq('id', negocioActual.id)
+  // Si hay PIN actual y quiere borrarlo, pedir confirmación
+  if (negocioActual.pin_seguridad && !pinNuevo) {
+    document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+    document.getElementById('pin-error').textContent = ''
+    document.getElementById('modal-pin').style.display = 'flex'
+    document.querySelectorAll('.pin-input')[0].focus()
 
+    document.getElementById('btn-confirmar-pin').onclick = async () => {
+      const pinIngresado = Array.from(document.querySelectorAll('.pin-input')).map(i => i.value).join('')
+      if (pinIngresado !== negocioActual.pin_seguridad) {
+        document.getElementById('pin-error').textContent = 'PIN incorrecto'
+        document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+        document.querySelectorAll('.pin-input')[0].focus()
+        return
+      }
+      document.getElementById('modal-pin').style.display = 'none'
+      await guardarPin(null, msg)
+    }
+    lucide.createIcons()
+    return
+  }
+
+  await guardarPin(pinNuevo || null, msg)
+})
+
+async function guardarPin(pin, msg) {
+  const { error } = await db.from('negocios').update({ pin_seguridad: pin }).eq('id', negocioActual.id)
   if (error) {
     msg.style.color = '#dc2626'
     msg.textContent = 'Error al guardar el PIN'
     return
   }
-
-  negocioActual.pin_seguridad = pin || null
+  negocioActual.pin_seguridad = pin
   msg.style.color = 'var(--verde)'
   msg.textContent = pin ? 'PIN guardado!' : 'PIN eliminado'
   document.getElementById('ajustes-pin').value = pin ? '****' : ''
-})
+}
 
 // GUARDAR PRECIOS
 document.getElementById('btn-guardar-precios').addEventListener('click', async () => {
