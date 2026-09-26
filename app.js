@@ -35,6 +35,13 @@ function mostrarModalPremium(mensaje) {
   lucide.createIcons()
 }
 
+document.getElementById('password').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-login').click()
+})
+document.getElementById('email').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-login').click()
+})
+
 // ── LOGIN ──
 document.getElementById('btn-login').addEventListener('click', async () => {
   const email = document.getElementById('email').value
@@ -640,7 +647,8 @@ document.getElementById('venta-buscar').addEventListener('input', async (e) => {
 })
 
 // AGREGAR ITEM A LA VENTA
-function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo) {
+// Se agrega 'async' al inicio de la función
+async function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo) {
   document.getElementById('venta-buscar').value = ''
   document.getElementById('venta-resultados').innerHTML = ''
 
@@ -648,6 +656,15 @@ function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, cod
   if (existente) {
     existente.cantidad++
     cambiarCantidad(itemsVenta.indexOf(existente), 0)
+    return
+  }
+
+  // VERIFICAR STOCK (Ahora el 'await' funcionará correctamente)
+  const { data: prodStock } = await db.from('productos').select('stock').eq('id', id).single()
+  const stockDisponible = prodStock?.stock || 0
+
+  if (stockDisponible <= 0) {
+    mostrarToast(`Sin stock disponible para ${nombre}`, 'error')
     return
   }
 
@@ -660,11 +677,13 @@ function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, cod
     precio_revendedor: precioRevendedor || null,
     tipo_precio: 'Minorista',
     cantidad: 1,
-    codigo: codigo
+    codigo: codigo,
+    stockDisponible
   })
 
   renderizarItemsVenta()
 }
+
 
 // RENDERIZAR ITEMS
 function renderizarItemsVenta() {
@@ -757,8 +776,21 @@ function renderizarItemsVenta() {
 
 // CAMBIAR CANTIDAD
 function cambiarCantidad(i, delta) {
-  itemsVenta[i].cantidad += delta
-  if (itemsVenta[i].cantidad <= 0) itemsVenta.splice(i, 1)
+  const item = itemsVenta[i]
+  const nuevaCantidad = item.cantidad + delta
+
+  if (nuevaCantidad <= 0) {
+    itemsVenta.splice(i, 1)
+    renderizarItemsVenta()
+    return
+  }
+
+  if (delta > 0 && item.stockDisponible && nuevaCantidad > item.stockDisponible) {
+    mostrarToast(`Stock insuficiente. Disponible: ${item.stockDisponible}`, 'error')
+    return
+  }
+
+  itemsVenta[i].cantidad = nuevaCantidad
   renderizarItemsVenta()
 }
 
@@ -1761,11 +1793,15 @@ document.querySelectorAll('.pin-input').forEach((input, i, inputs) => {
       inputs[i + 1].focus()
     }
   })
+
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Backspace' && !input.value && i > 0) {
-      inputs[i - 1].focus()
-    }
-  })
+  if (e.key === 'Backspace' && !input.value && i > 0) {
+    inputs[i - 1].focus()
+  }
+  if (e.key === 'Enter') {
+    document.getElementById('btn-confirmar-pin').click()
+  }
+})
 })
 
 document.getElementById('btn-cerrar-modal-pin').addEventListener('click', () => {
