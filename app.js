@@ -643,6 +643,12 @@ document.getElementById('venta-buscar').addEventListener('input', async (e) => {
       const codigo = el.dataset.codigo || null
       agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo)
     })
+    document.getElementById('venta-buscar').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const primer = document.querySelector('.resultado-item[data-id]')
+    if (primer) primer.click()
+  }
+})
   })
 })
 
@@ -3790,6 +3796,7 @@ function limpiarVenta() {
 
 // ── EDITAR VENTA ──
 let ventaEditando = null
+let itemsEditando = []
 
 function editarVenta(id, cliente, metodo, fecha) {
   ventaEditando = id
@@ -3799,18 +3806,94 @@ function editarVenta(id, cliente, metodo, fecha) {
   const fechaLocal = new Date(fechaObj.getTime() - fechaObj.getTimezoneOffset() * 60000)
     .toISOString().slice(0, 16)
   document.getElementById('editar-venta-fecha').value = fechaLocal
+  document.getElementById('editar-buscar-producto').value = ''
+  document.getElementById('editar-resultados-productos').innerHTML = ''
+
+  // Cargar items actuales
+  db.from('venta_items').select('*').eq('venta_id', id).then(({ data }) => {
+    itemsEditando = data || []
+    renderizarItemsEditando()
+  })
+
   document.getElementById('modal-editar-venta').style.display = 'flex'
   lucide.createIcons()
 }
 
+function renderizarItemsEditando() {
+  const container = document.getElementById('editar-venta-items')
+  if (itemsEditando.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--texto-suave)">Sin productos</p>'
+    return
+  }
+  container.innerHTML = itemsEditando.map((item, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:var(--fondo); border-radius:8px; border:1px solid var(--borde)">
+      <div>
+        <div style="font-size:13px; font-weight:600">${item.nombre_producto}</div>
+        <div style="font-size:12px; color:var(--texto-suave)">x${item.cantidad} — $${Number(item.precio_unitario).toLocaleString('es-AR')}</div>
+      </div>
+      <button class="btn-rojo" style="padding:4px 10px; font-size:12px" onclick="eliminarItemEditando(${i})">✕</button>
+    </div>
+  `).join('')
+}
+
+function eliminarItemEditando(i) {
+  itemsEditando.splice(i, 1)
+  renderizarItemsEditando()
+}
+
+// BUSCADOR EN EDITAR VENTA
+document.getElementById('editar-buscar-producto').addEventListener('input', async (e) => {
+  const texto = e.target.value.trim()
+  const resultados = document.getElementById('editar-resultados-productos')
+  if (texto.length < 1) { resultados.innerHTML = ''; return }
+
+  const { data } = await db.from('productos').select('*')
+    .eq('negocio_id', negocioActual.id)
+    .or(`nombre.ilike.%${texto}%,codigo.ilike.%${texto}%`)
+    .order('codigo', { ascending: true })
+    .limit(5)
+
+  if (!data || data.length === 0) {
+    resultados.innerHTML = '<div class="resultado-item">No se encontraron productos</div>'
+    return
+  }
+
+  resultados.innerHTML = data.map(p => `
+    <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-codigo="${p.codigo || ''}">
+      <div>
+        <div>${p.nombre}</div>
+        <div class="resultado-codigo">${p.codigo || 'Sin código'}</div>
+      </div>
+      <span class="resultado-precio">$${Number(p.precio).toLocaleString('es-AR')}</span>
+    </div>
+  `).join('')
+
+  resultados.querySelectorAll('.resultado-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      itemsEditando.push({
+        nombre_producto: el.dataset.nombre,
+        precio_unitario: parseFloat(el.dataset.precio),
+        cantidad: 1,
+        codigo: el.dataset.codigo || null,
+        nuevo: true
+      })
+      renderizarItemsEditando()
+      document.getElementById('editar-buscar-producto').value = ''
+      resultados.innerHTML = ''
+    })
+  })
+})
+
 document.getElementById('btn-cerrar-editar-venta').addEventListener('click', () => {
   document.getElementById('modal-editar-venta').style.display = 'none'
   ventaEditando = null
+  itemsEditando = []
 })
 
 document.getElementById('btn-cancelar-editar-venta').addEventListener('click', () => {
   document.getElementById('modal-editar-venta').style.display = 'none'
   ventaEditando = null
+  itemsEditando = []
 })
 
 document.getElementById('btn-guardar-editar-venta').addEventListener('click', async () => {
@@ -3820,20 +3903,29 @@ document.getElementById('btn-guardar-editar-venta').addEventListener('click', as
   const metodo = document.getElementById('editar-venta-metodo').value
   const fechaInput = document.getElementById('editar-venta-fecha').value
   const fecha = fechaInput ? new Date(fechaInput).toISOString() : null
+  const nuevoTotal = itemsEditando.reduce((acc, i) => acc + i.precio_unitario * i.cantidad, 0)
 
   const { error } = await db.from('ventas').update({
-    cliente,
-    metodo_pago: metodo,
-    fecha
+    cliente, metodo_pago: metodo, fecha, total: nuevoTotal
   }).eq('id', ventaEditando)
 
-  if (error) {
-    mostrarToast('Error al guardar los cambios', 'error')
-    return
-  }
+  if (error) { mostrarToast('Error al guardar', 'error'); return }
+
+  // Reemplazar todos los items
+  await db.from('venta_items').delete().eq('venta_id', ventaEditando)
+  await db.from('venta_items').insert(
+    itemsEditando.map(i => ({
+      venta_id: ventaEditando,
+      nombre_producto: i.nombre_producto,
+      precio_unitario: i.precio_unitario,
+      cantidad: i.cantidad,
+      codigo: i.codigo || null
+    }))
+  )
 
   document.getElementById('modal-editar-venta').style.display = 'none'
   ventaEditando = null
+  itemsEditando = []
   mostrarToast('Venta actualizada!')
   cargarHistorial()
 })
@@ -3888,6 +3980,74 @@ document.getElementById('btn-cerrar-calculadora').addEventListener('click', () =
 
 document.getElementById('btn-cerrar-calculadora-2').addEventListener('click', () => {
   document.getElementById('modal-calculadora').style.display = 'none'
+})
+
+// ── PRECIO PERSONALIZADO ──
+document.getElementById('btn-precio-personalizado').addEventListener('click', () => {
+  if (itemsVenta.length === 0) {
+    mostrarToast('Agregá productos primero', 'error')
+    return
+  }
+
+  if (negocioActual.pin_seguridad && !infoDesbloqueada) {
+    document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+    document.getElementById('pin-error').textContent = ''
+    document.getElementById('modal-pin').style.display = 'flex'
+    document.querySelectorAll('.pin-input')[0].focus()
+
+    document.getElementById('btn-confirmar-pin').onclick = () => {
+      const pinIngresado = Array.from(document.querySelectorAll('.pin-input')).map(i => i.value).join('')
+      if (pinIngresado !== negocioActual.pin_seguridad) {
+        document.getElementById('pin-error').textContent = 'PIN incorrecto'
+        document.querySelectorAll('.pin-input').forEach(input => input.value = '')
+        document.querySelectorAll('.pin-input')[0].focus()
+        return
+      }
+      intentosFallidosPin = 0
+      document.getElementById('modal-pin').style.display = 'none'
+      toggleInfoSensible(true)
+      abrirPrecioPersonalizado()
+    }
+    lucide.createIcons()
+    return
+  }
+  abrirPrecioPersonalizado()
+})
+
+function abrirPrecioPersonalizado() {
+  const select = document.getElementById('precio-personalizado-producto')
+  select.innerHTML = itemsVenta.map((item, i) => 
+    `<option value="${i}">${item.nombre} — $${Number(item.precio).toLocaleString('es-AR')}</option>`
+  ).join('')
+  document.getElementById('precio-personalizado-valor').value = ''
+  document.getElementById('modal-precio-personalizado').style.display = 'flex'
+  lucide.createIcons()
+}
+
+document.getElementById('btn-cerrar-precio-personalizado').addEventListener('click', () => {
+  document.getElementById('modal-precio-personalizado').style.display = 'none'
+})
+
+document.getElementById('btn-cancelar-precio-personalizado').addEventListener('click', () => {
+  document.getElementById('modal-precio-personalizado').style.display = 'none'
+})
+
+document.getElementById('btn-aplicar-precio-personalizado').addEventListener('click', () => {
+  const i = parseInt(document.getElementById('precio-personalizado-producto').value)
+  const precio = parseFloat(document.getElementById('precio-personalizado-valor').value)
+
+  if (isNaN(precio) || precio <= 0) {
+    mostrarToast('Ingresá un precio válido', 'error')
+    return
+  }
+
+  itemsVenta[i].precio = precio
+  itemsVenta[i].precio_base = precio
+  itemsVenta[i].tipo_precio = 'Personalizado'
+  renderizarItemsVenta()
+
+  document.getElementById('modal-precio-personalizado').style.display = 'none'
+  mostrarToast('Precio personalizado aplicado!')
 })
 
 lucide.createIcons()
