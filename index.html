@@ -448,6 +448,9 @@
       <div class="panel-cobro">
         <h3>Resumen</h3>
 <p id="resumen-tipo-precio" style="font-size:13px; font-weight:600; text-align:center"></p>
+<button class="btn-gris" id="btn-precio-personalizado" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px; font-size:13px">
+  <i data-lucide="tag" style="width:14px;height:14px"></i> Precio personalizado
+</button>
         <div class="resumen-linea">
   <span>Subtotal</span>
   <span id="venta-subtotal">$0</span>
@@ -1347,14 +1350,14 @@
 
 <!-- MODAL EDITAR VENTA -->
 <div class="modal-overlay" id="modal-editar-venta" style="display:none">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-header">
       <h3>Editar venta</h3>
       <button class="btn-cerrar" id="btn-cerrar-editar-venta">
         <i data-lucide="x"></i>
       </button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="gap:16px">
       <div class="campo">
         <label>Cliente</label>
         <input type="text" id="editar-venta-cliente" placeholder="Nombre del cliente" />
@@ -1371,6 +1374,17 @@
       <div class="campo">
         <label>Fecha y hora</label>
         <input type="datetime-local" id="editar-venta-fecha" />
+      </div>
+
+      <div style="border-top:1px solid var(--borde); padding-top:14px">
+        <label style="font-size:13px; font-weight:600; color:var(--texto-suave); margin-bottom:8px; display:block">PRODUCTOS DE LA VENTA</label>
+        <div id="editar-venta-items" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px"></div>
+
+        <div class="campo">
+          <label>Agregar producto</label>
+          <input type="text" id="editar-buscar-producto" placeholder="Buscar por nombre o código..." />
+          <div id="editar-resultados-productos" class="resultados-lista" style="margin-top:4px"></div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1400,6 +1414,35 @@
     </div>
     <div class="modal-footer">
       <button class="btn-gris" id="btn-cerrar-calculadora-2">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PRECIO PERSONALIZADO -->
+<div class="modal-overlay" id="modal-precio-personalizado" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <h3>Precio personalizado</h3>
+      <button class="btn-cerrar" id="btn-cerrar-precio-personalizado">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:var(--texto-suave)">Seleccioná el producto y escribí el precio personalizado.</p>
+      <div class="campo">
+        <label>Producto</label>
+        <select id="precio-personalizado-producto"></select>
+      </div>
+      <div class="campo">
+        <label>Precio personalizado</label>
+        <input type="number" id="precio-personalizado-valor" placeholder="Ej: 5000" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-gris" id="btn-cancelar-precio-personalizado">Cancelar</button>
+      <button class="btn-verde" id="btn-aplicar-precio-personalizado" style="justify-content:center">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Aplicar
+      </button>
     </div>
   </div>
 </div>
