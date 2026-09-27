@@ -714,14 +714,16 @@ function renderizarItemsVenta() {
 
   // ACTUALIZAR PRECIO DE CADA ITEM SEGÚN EL TIPO GLOBAL
   itemsVenta.forEach(item => {
-    if (tipoPrecioGlobal === 'Revendedor' && item.precio_revendedor) {
-      item.precio = item.precio_revendedor
-    } else if (tipoPrecioGlobal === 'Mayorista' && item.precio_mayor) {
-      item.precio = item.precio_mayor
-    } else {
-      item.precio = item.precio_base
-    }
-    item.tipo_precio = tipoPrecioGlobal
+    if (item.tipo_precio !== 'Personalizado') {
+  if (tipoPrecioGlobal === 'Revendedor' && item.precio_revendedor) {
+    item.precio = item.precio_revendedor
+  } else if (tipoPrecioGlobal === 'Mayorista' && item.precio_mayor) {
+    item.precio = item.precio_mayor
+  } else {
+    item.precio = item.precio_base
+  }
+  item.tipo_precio = tipoPrecioGlobal
+}
   })
 
   // BADGE DE TIPO DE PRECIO GLOBAL
@@ -2337,7 +2339,18 @@ const rubro = rubros[negocioActual.rubro] || negocioActual.rubro || ''
         <span>$${Number(venta.total).toLocaleString('es-AR')}</span>
       </div>
 
-      <div class="ticket-metodo">Pago: ${venta.metodo_pago.toUpperCase()}</div>
+      ${venta.descuento > 0 ? `
+<hr class="ticket-separador">
+<div class="ticket-info-fila">
+  <span>Subtotal</span>
+  <span>$${Number((venta.total || 0) + (venta.descuento || 0)).toLocaleString('es-AR')}</span>
+</div>
+<div class="ticket-info-fila" style="color:#dc2626">
+  <span>Descuento</span>
+  <span>-$${Number(venta.descuento).toLocaleString('es-AR')}</span>
+</div>
+` : ''}
+<div class="ticket-metodo">Pago: ${venta.metodo_pago.toUpperCase()}</div>
 
       <hr class="ticket-separador">
 
@@ -3826,14 +3839,32 @@ function renderizarItemsEditando() {
     return
   }
   container.innerHTML = itemsEditando.map((item, i) => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:var(--fondo); border-radius:8px; border:1px solid var(--borde)">
-      <div>
+    <div style="background:var(--fondo); border-radius:8px; border:1px solid var(--borde); padding:10px 12px; display:flex; flex-direction:column; gap:8px">
+      <div style="display:flex; justify-content:space-between; align-items:center">
         <div style="font-size:13px; font-weight:600">${item.nombre_producto}</div>
-        <div style="font-size:12px; color:var(--texto-suave)">x${item.cantidad} — $${Number(item.precio_unitario).toLocaleString('es-AR')}</div>
+        <button class="btn-rojo" style="padding:3px 8px; font-size:11px" onclick="eliminarItemEditando(${i})">✕</button>
       </div>
-      <button class="btn-rojo" style="padding:4px 10px; font-size:12px" onclick="eliminarItemEditando(${i})">✕</button>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+        <div>
+          <label style="font-size:11px; color:var(--texto-suave)">Cantidad</label>
+          <input type="number" min="1" value="${item.cantidad}" 
+            style="width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--borde); background:var(--fondo-card); color:var(--texto); font-size:13px"
+            onchange="actualizarItemEditando(${i}, 'cantidad', this.value)" />
+        </div>
+        <div>
+          <label style="font-size:11px; color:var(--texto-suave)">Precio unitario</label>
+          <input type="number" min="0" value="${item.precio_unitario}"
+            style="width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--borde); background:var(--fondo-card); color:var(--texto); font-size:13px"
+            onchange="actualizarItemEditando(${i}, 'precio_unitario', this.value)" />
+        </div>
+      </div>
     </div>
   `).join('')
+}
+
+function actualizarItemEditando(i, campo, valor) {
+  if (campo === 'cantidad') itemsEditando[i].cantidad = parseInt(valor) || 1
+  if (campo === 'precio_unitario') itemsEditando[i].precio_unitario = parseFloat(valor) || 0
 }
 
 function eliminarItemEditando(i) {
@@ -3859,24 +3890,35 @@ document.getElementById('editar-buscar-producto').addEventListener('input', asyn
   }
 
   resultados.innerHTML = data.map(p => `
-    <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-codigo="${p.codigo || ''}">
-      <div>
-        <div>${p.nombre}</div>
-        <div class="resultado-codigo">${p.codigo || 'Sin código'}</div>
-      </div>
-      <span class="resultado-precio">$${Number(p.precio).toLocaleString('es-AR')}</span>
+  <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-precio-mayor="${p.precio_mayor || 0}" data-precio-revendedor="${p.precio_revendedor || 0}" data-codigo="${p.codigo || ''}">
+    <div>
+      <div>${p.nombre}</div>
+      <div class="resultado-codigo">${p.codigo || 'Sin código'}</div>
     </div>
-  `).join('')
+    <span class="resultado-precio">$${Number(p.precio).toLocaleString('es-AR')}</span>
+  </div>
+`).join('')
 
   resultados.querySelectorAll('.resultado-item[data-id]').forEach(el => {
     el.addEventListener('click', () => {
-      itemsEditando.push({
-        nombre_producto: el.dataset.nombre,
-        precio_unitario: parseFloat(el.dataset.precio),
-        cantidad: 1,
-        codigo: el.dataset.codigo || null,
-        nuevo: true
-      })
+      const precioMenor = parseFloat(el.dataset.precio)
+const precioMayor = parseFloat(el.dataset.precioMayor) || null
+const precioRevendedor = parseFloat(el.dataset.precioRevendedor) || null
+const cantidadTotal = itemsEditando.reduce((acc, i) => acc + i.cantidad, 0) + 1
+const umbralMayor = negocioActual.umbral_mayor || 3
+const umbralRevendedor = negocioActual.umbral_revendedor || 5
+
+let precio = precioMenor
+if (precioRevendedor && cantidadTotal >= umbralRevendedor) precio = precioRevendedor
+else if (precioMayor && cantidadTotal >= umbralMayor) precio = precioMayor
+
+itemsEditando.push({
+  nombre_producto: el.dataset.nombre,
+  precio_unitario: precio,
+  cantidad: 1,
+  codigo: el.dataset.codigo || null,
+  nuevo: true
+})
       renderizarItemsEditando()
       document.getElementById('editar-buscar-producto').value = ''
       resultados.innerHTML = ''
