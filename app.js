@@ -211,13 +211,16 @@ document.querySelectorAll('.menu-item').forEach(item => {
     if (seccion === 'productos') cargarProductos()
     if (seccion === 'historial') cargarHistorial()
     if (seccion === 'caja') cargarCaja()
-      if (seccion === 'ventas') {
+    if (seccion === 'ventas') {
   const ahora = new Date()
   const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000)
     .toISOString().slice(0, 16)
   document.getElementById('venta-fecha').value = fechaLocal
 }
-    if (seccion === 'reportes') {
+
+if (seccion === 'compras') cargarCompras()
+
+if (seccion === 'reportes') {
   if (!verificarLimiteFree('reportes')) {
     document.querySelectorAll('.menu-item').forEach(i => i.classList.remove('active'))
     document.querySelector('.menu-item[data-seccion="dashboard"]').classList.add('active')
@@ -4090,6 +4093,283 @@ document.getElementById('btn-aplicar-precio-personalizado').addEventListener('cl
 
   document.getElementById('modal-precio-personalizado').style.display = 'none'
   mostrarToast('Precio personalizado aplicado!')
+})
+
+// ── COMPRAS ──
+let itemsCompra = []
+
+async function cargarCompras() {
+  const { data, error } = await db
+    .from('compras')
+    .select('*')
+    .eq('negocio_id', negocioActual.id)
+    .order('fecha', { ascending: false })
+
+  const tbody = document.getElementById('tabla-compras')
+
+  if (error || !data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>'
+    return
+  }
+
+  tbody.innerHTML = data.map(c => {
+    const fecha = new Date(c.fecha)
+    const fechaTexto = fecha.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'}) + ' - ' + fecha.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'})
+    return `
+      <tr class="fila-venta">
+        <td onclick="toggleDetalleCompra('${c.id}')"><button class="btn-expandir" id="flecha-compra-${c.id}"><i data-lucide="chevron-right"></i></button></td>
+        <td onclick="toggleDetalleCompra('${c.id}')">${fechaTexto}</td>
+        <td onclick="toggleDetalleCompra('${c.id}')">${c.proveedor || '-'}</td>
+        <td onclick="toggleDetalleCompra('${c.id}')"><span class="badge-metodo">${c.metodo_pago}</span></td>
+        <td onclick="toggleDetalleCompra('${c.id}')">${c.costo_envio > 0 ? '$' + Number(c.costo_envio).toLocaleString('es-AR') : '-'}</td>
+        <td onclick="toggleDetalleCompra('${c.id}')" style="font-weight:bold; color:var(--verde)">$${Number(c.total).toLocaleString('es-AR')}</td>
+        <td><button class="btn-rojo" style="padding:6px 10px" onclick="eliminarCompra('${c.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td>
+      </tr>
+      <tr class="fila-detalle" id="detalle-compra-${c.id}" style="display:none">
+        <td colspan="7">
+          <div class="detalle-contenido" id="detalle-compra-contenido-${c.id}">Cargando...</div>
+        </td>
+      </tr>
+    `
+  }).join('')
+
+  lucide.createIcons()
+}
+
+async function toggleDetalleCompra(compraId) {
+  const fila = document.getElementById('detalle-compra-' + compraId)
+  const flecha = document.getElementById('flecha-compra-' + compraId)
+  const contenido = document.getElementById('detalle-compra-contenido-' + compraId)
+
+  const estaAbierto = fila.style.display === 'table-row'
+  if (estaAbierto) {
+    fila.style.display = 'none'
+    flecha.classList.remove('abierto')
+    return
+  }
+
+  fila.style.display = 'table-row'
+  flecha.classList.add('abierto')
+
+  const { data: items } = await db.from('compra_items').select('*').eq('compra_id', compraId)
+
+  if (!items || items.length === 0) {
+    contenido.innerHTML = '<p style="color:var(--texto-suave); font-size:13px; padding:8px">Sin productos</p>'
+    return
+  }
+
+  contenido.innerHTML = `
+    <table style="width:100%; border-collapse:collapse; font-size:13px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--borde)">
+          <th style="padding:8px 12px; text-align:left; color:var(--texto-suave)">PRODUCTO</th>
+          <th style="padding:8px 12px; text-align:center; color:var(--texto-suave)">CANT.</th>
+          <th style="padding:8px 12px; text-align:right; color:var(--texto-suave)">COSTO UNIT.</th>
+          <th style="padding:8px 12px; text-align:right; color:var(--texto-suave)">SUBTOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(i => `
+          <tr style="border-bottom:1px solid var(--borde)">
+            <td style="padding:10px 12px">${i.nombre_producto}</td>
+            <td style="padding:10px 12px; text-align:center">${i.cantidad}</td>
+            <td style="padding:10px 12px; text-align:right">$${Number(i.precio_unitario).toLocaleString('es-AR')}</td>
+            <td style="padding:10px 12px; text-align:right; color:var(--verde); font-weight:600">$${Number(i.precio_unitario * i.cantidad).toLocaleString('es-AR')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `
+}
+
+async function eliminarCompra(id) {
+  document.getElementById('modal-eliminar-compra-id').value = id
+  document.getElementById('modal-eliminar-compra').style.display = 'flex'
+  lucide.createIcons()
+}
+
+function renderizarItemsCompra() {
+  const container = document.getElementById('compra-items')
+  if (itemsCompra.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--texto-suave)">Sin productos agregados</p>'
+  } else {
+    container.innerHTML = itemsCompra.map((item, i) => `
+      <div style="background:var(--fondo); border-radius:8px; border:1px solid var(--borde); padding:10px 12px; display:flex; flex-direction:column; gap:8px">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+          <div style="font-size:13px; font-weight:600">${item.nombre_producto}</div>
+          <button class="btn-rojo" style="padding:3px 8px; font-size:11px" onclick="quitarItemCompra(${i})">✕</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+          <div>
+            <label style="font-size:11px; color:var(--texto-suave)">Cantidad</label>
+            <input type="number" min="1" value="${item.cantidad}"
+              style="width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--borde); background:var(--fondo-card); color:var(--texto); font-size:13px"
+              onchange="actualizarItemCompra(${i}, 'cantidad', this.value)" />
+          </div>
+          <div>
+            <label style="font-size:11px; color:var(--texto-suave)">Costo unitario</label>
+            <input type="number" min="0" value="${item.precio_unitario}"
+              style="width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--borde); background:var(--fondo-card); color:var(--texto); font-size:13px"
+              onchange="actualizarItemCompra(${i}, 'precio_unitario', this.value)" />
+          </div>
+        </div>
+      </div>
+    `).join('')
+  }
+  actualizarTotalCompra()
+}
+
+function actualizarItemCompra(i, campo, valor) {
+  if (campo === 'cantidad') itemsCompra[i].cantidad = parseInt(valor) || 1
+  if (campo === 'precio_unitario') itemsCompra[i].precio_unitario = parseFloat(valor) || 0
+  actualizarTotalCompra()
+}
+
+function quitarItemCompra(i) {
+  itemsCompra.splice(i, 1)
+  renderizarItemsCompra()
+}
+
+function actualizarTotalCompra() {
+  const subtotal = itemsCompra.reduce((acc, i) => acc + i.precio_unitario * i.cantidad, 0)
+  const envio = parseFloat(document.getElementById('compra-envio').value) || 0
+  const total = subtotal + envio
+  document.getElementById('compra-total-preview').textContent = '$' + Math.round(total).toLocaleString('es-AR')
+}
+
+document.getElementById('compra-envio').addEventListener('input', actualizarTotalCompra)
+
+document.getElementById('btn-nueva-compra').addEventListener('click', () => {
+  itemsCompra = []
+  renderizarItemsCompra()
+  document.getElementById('modal-compra-titulo').textContent = 'Nueva compra'
+  document.getElementById('compra-proveedor').value = ''
+  document.getElementById('compra-metodo').value = 'efectivo'
+  document.getElementById('compra-envio').value = '0'
+  document.getElementById('compra-notas').value = ''
+  document.getElementById('compra-buscar-producto').value = ''
+  document.getElementById('compra-resultados-productos').innerHTML = ''
+  const ahora = new Date()
+  document.getElementById('compra-fecha').value = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  document.getElementById('modal-compra').style.display = 'flex'
+  lucide.createIcons()
+})
+
+document.getElementById('btn-cerrar-compra').addEventListener('click', () => {
+  document.getElementById('modal-compra').style.display = 'none'
+})
+
+document.getElementById('btn-cancelar-compra').addEventListener('click', () => {
+  document.getElementById('modal-compra').style.display = 'none'
+})
+
+document.getElementById('compra-buscar-producto').addEventListener('input', async (e) => {
+  const texto = e.target.value.trim()
+  const resultados = document.getElementById('compra-resultados-productos')
+  if (texto.length < 1) { resultados.innerHTML = ''; return }
+
+  const { data } = await db.from('productos').select('*')
+    .eq('negocio_id', negocioActual.id)
+    .or(`nombre.ilike.%${texto}%,codigo.ilike.%${texto}%`)
+    .order('codigo', { ascending: true })
+    .limit(5)
+
+  if (!data || data.length === 0) {
+    resultados.innerHTML = '<div class="resultado-item">No se encontraron productos</div>'
+    return
+  }
+
+  resultados.innerHTML = data.map(p => `
+    <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-costo="${p.costo || 0}" data-codigo="${p.codigo || ''}">
+      <div>
+        <div>${p.nombre}</div>
+        <div class="resultado-codigo">${p.codigo || 'Sin código'}</div>
+      </div>
+      <span class="resultado-precio">${p.costo ? '$' + Number(p.costo).toLocaleString('es-AR') : 'Sin costo'}</span>
+    </div>
+  `).join('')
+
+  resultados.querySelectorAll('.resultado-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      itemsCompra.push({
+        producto_id: el.dataset.id,
+        nombre_producto: el.dataset.nombre,
+        precio_unitario: parseFloat(el.dataset.costo) || 0,
+        cantidad: 1
+      })
+      renderizarItemsCompra()
+      document.getElementById('compra-buscar-producto').value = ''
+      resultados.innerHTML = ''
+    })
+  })
+})
+
+document.getElementById('compra-buscar-producto').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const primer = document.querySelector('#compra-resultados-productos .resultado-item[data-id]')
+    if (primer) primer.click()
+  }
+})
+
+document.getElementById('btn-guardar-compra').addEventListener('click', async () => {
+  if (itemsCompra.length === 0) {
+    mostrarToast('Agregá al menos un producto', 'error')
+    return
+  }
+
+  const proveedor = document.getElementById('compra-proveedor').value.trim() || null
+  const fecha = new Date(document.getElementById('compra-fecha').value).toISOString()
+  const metodo = document.getElementById('compra-metodo').value
+  const envio = parseFloat(document.getElementById('compra-envio').value) || 0
+  const notas = document.getElementById('compra-notas').value.trim() || null
+  const subtotal = itemsCompra.reduce((acc, i) => acc + i.precio_unitario * i.cantidad, 0)
+  const total = subtotal + envio
+
+  const { data: compra, error } = await db.from('compras').insert({
+    negocio_id: negocioActual.id,
+    proveedor, fecha, metodo_pago: metodo,
+    costo_envio: envio, total, notas
+  }).select().single()
+
+  if (error) { mostrarToast('Error al registrar la compra', 'error'); return }
+
+  await db.from('compra_items').insert(
+    itemsCompra.map(i => ({
+      compra_id: compra.id,
+      producto_id: i.producto_id,
+      nombre_producto: i.nombre_producto,
+      cantidad: i.cantidad,
+      precio_unitario: i.precio_unitario
+    }))
+  )
+
+  // ACTUALIZAR STOCK DE CADA PRODUCTO
+  for (const item of itemsCompra) {
+    const { data: prod } = await db.from('productos').select('stock').eq('id', item.producto_id).single()
+    if (prod) {
+      await db.from('productos').update({ stock: prod.stock + item.cantidad }).eq('id', item.producto_id)
+    }
+  }
+
+  document.getElementById('modal-compra').style.display = 'none'
+  itemsCompra = []
+  mostrarToast('Compra registrada! Stock actualizado.')
+  cargarCompras()
+})
+
+document.getElementById('btn-cerrar-modal-eliminar-compra').addEventListener('click', () => {
+  document.getElementById('modal-eliminar-compra').style.display = 'none'
+})
+document.getElementById('btn-cancelar-eliminar-compra').addEventListener('click', () => {
+  document.getElementById('modal-eliminar-compra').style.display = 'none'
+})
+document.getElementById('btn-confirmar-eliminar-compra').addEventListener('click', async () => {
+  const id = document.getElementById('modal-eliminar-compra-id').value
+  await db.from('compra_items').delete().eq('compra_id', id)
+  await db.from('compras').delete().eq('id', id)
+  document.getElementById('modal-eliminar-compra').style.display = 'none'
+  mostrarToast('Compra eliminada!')
+  cargarCompras()
 })
 
 lucide.createIcons()
