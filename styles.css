@@ -1867,6 +1867,38 @@ body.modo-oscuro .badge-categoria {
   background: #fee2e2;
 }
 
+/* ── PESTAÑAS ── */
+.pestañas-wrapper {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--borde);
+  margin-bottom: 20px;
+}
+
+.pestaña {
+  background: none;
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--texto-suave);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.pestaña:hover {
+  color: var(--verde);
+}
+
+.pestaña.activa {
+  color: var(--verde);
+  border-bottom-color: var(--verde);
+}
 
 
 
