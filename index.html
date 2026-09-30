@@ -102,32 +102,28 @@
       <aside class="sidebar" id="sidebar">
         <ul class="sidebar-menu">
           <li class="menu-item active" data-seccion="dashboard">
-            <i data-lucide="layout-dashboard" class="menu-icon"></i>
-            <span class="menu-texto">Dashboard</span>
-          </li>
-          <li class="menu-item" data-seccion="productos">
-            <i data-lucide="package" class="menu-icon"></i>
-            <span class="menu-texto">Productos</span>
-          </li>
-          <li class="menu-item" data-seccion="ventas">
-            <i data-lucide="shopping-cart" class="menu-icon"></i>
-            <span class="menu-texto">Ventas</span>
-          </li>
-          <li class="menu-item" data-seccion="historial">
-            <i data-lucide="clock" class="menu-icon"></i>
-            <span class="menu-texto">Historial</span>
-          </li>
-          <li class="menu-item" data-seccion="caja">
-            <i data-lucide="wallet" class="menu-icon"></i>
-            <span class="menu-texto">Caja</span>
-          </li>
-          <li class="menu-item" data-seccion="reportes">
-  <i data-lucide="bar-chart-2" class="menu-icon"></i>
-  <span class="menu-texto">Reportes</span>
+  <i data-lucide="layout-dashboard" class="menu-icon"></i>
+  <span class="menu-texto">Dashboard</span>
+</li>
+<li class="menu-item" data-seccion="productos">
+  <i data-lucide="package" class="menu-icon"></i>
+  <span class="menu-texto">Productos</span>
+</li>
+<li class="menu-item" data-seccion="ventas">
+  <i data-lucide="shopping-cart" class="menu-icon"></i>
+  <span class="menu-texto">Ventas</span>
 </li>
 <li class="menu-item" data-seccion="compras">
   <i data-lucide="shopping-bag" class="menu-icon"></i>
   <span class="menu-texto">Compras</span>
+</li>
+<li class="menu-item" data-seccion="caja">
+  <i data-lucide="wallet" class="menu-icon"></i>
+  <span class="menu-texto">Caja</span>
+</li>
+<li class="menu-item" data-seccion="reportes">
+  <i data-lucide="bar-chart-2" class="menu-icon"></i>
+  <span class="menu-texto">Reportes</span>
 </li>
         </ul>
         <div class="sidebar-footer">
@@ -400,120 +396,177 @@
 </div>
 
         <div id="seccion-ventas" style="display:none">
-  <div class="seccion-header">
-    <h2 class="seccion-titulo">Nueva venta</h2>
+
+  <!-- PESTAÑAS -->
+  <div class="pestañas-wrapper">
+    <button class="pestaña activa" data-tab="nueva-venta" id="tab-nueva-venta">
+      <i data-lucide="shopping-cart" style="width:15px;height:15px"></i> Nueva venta
+    </button>
+    <button class="pestaña" data-tab="historial-ventas" id="tab-historial-ventas">
+      <i data-lucide="clock" style="width:15px;height:15px"></i> Historial
+    </button>
   </div>
 
-  <!-- BUSCADOR -->
-  <div class="ventas-layout">
-    <div class="ventas-izq">
-
-      <div class="campo">
-        <label>Buscar producto por nombre o código</label>
-        <input type="text" id="venta-buscar" placeholder="Escribí o escaneá el código..." />
+  <!-- TAB NUEVA VENTA -->
+  <div id="tab-content-nueva-venta">
+    <div class="ventas-layout">
+      <div class="ventas-izq">
+        <div class="campo">
+          <label>Buscar producto por nombre o código</label>
+          <input type="text" id="venta-buscar" placeholder="Escribí o escaneá el código..." />
+        </div>
+        <div id="venta-resultados" class="resultados-lista"></div>
+        <div class="tabla-wrapper tabla-ventas-desktop" style="margin-top:20px">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Precio</th>
+                <th>Cantidad</th>
+                <th>Subtotal</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="venta-items">
+              <tr><td colspan="5" class="tabla-vacia">Agregá productos a la venta</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="venta-items-wrapper"></div>
       </div>
 
-      <div class="campo" style="margin-top:12px">
-  <label>Nombre del cliente <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
-  <input type="text" id="venta-cliente" placeholder="Ej: Juan García" />
-</div>
-
-      <!-- RESULTADOS BUSQUEDA -->
-      <div id="venta-resultados" class="resultados-lista"></div>
-
-      <!-- LISTA DE ITEMS DE LA VENTA -->
-      <!-- TABLA DESKTOP -->
-<div class="tabla-wrapper tabla-ventas-desktop" style="margin-top:20px">
-  <table class="tabla">
-    <thead>
-      <tr>
-        <th>Producto</th>
-        <th>Precio</th>
-        <th>Cantidad</th>
-        <th>Subtotal</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody id="venta-items">
-      <tr>
-        <td colspan="5" class="tabla-vacia">Agregá productos a la venta</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-<!-- CARDS MOBILE -->
-<div id="venta-items-wrapper"></div>
-
-    </div>
-
-    <!-- PANEL DERECHO -->
-    <div class="ventas-der">
-      <div class="panel-cobro">
-        <h3>Resumen</h3>
-<p id="resumen-tipo-precio" style="font-size:13px; font-weight:600; text-align:center"></p>
-<button class="btn-gris" id="btn-precio-personalizado" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px; font-size:13px">
-  <i data-lucide="tag" style="width:14px;height:14px"></i> Precio personalizado
-</button>
-        <div class="resumen-linea">
-  <span>Subtotal</span>
-  <span id="venta-subtotal">$0</span>
-</div>
-
-<div class="campo">
-  <label>Descuento</label>
-  <div style="display:flex; gap:8px; align-items:center">
-    <input type="number" id="descuento-valor" placeholder="0" min="0" style="flex:1" />
-    <select id="descuento-tipo" style="width:70px">
-      <option value="porcentaje">%</option>
-      <option value="monto">$</option>
-    </select>
-  </div>
-</div>
-
-<div class="resumen-linea">
-  <span>Total</span>
-  <span class="resumen-total" id="venta-total">$0</span>
-</div>
-
-        <div class="campo">
-          <label>Método de pago</label>
-          <select id="venta-metodo">
-            <option value="efectivo">Efectivo</option>
-            <option value="debito">Débito</option>
-            <option value="credito">Crédito</option>
-            <option value="transferencia">Transferencia</option>
-          </select>
-        </div>
-
-        <div class="campo">
-  <label>Fecha de la venta</label>
-  <input type="datetime-local" id="venta-fecha" />
-</div>
-
-        <div class="campo" id="campo-efectivo">
-          <label>Con cuánto paga</label>
-          <input type="number" id="venta-efectivo" placeholder="Ej: 10000" />
-          <div class="vuelto-box" id="vuelto-box" style="display:none">
-            <span>Vuelto:</span>
-            <span id="venta-vuelto" class="vuelto-valor">$0</span>
+      <div class="ventas-der">
+        <div class="panel-cobro">
+          <h3>Resumen</h3>
+          <p id="resumen-tipo-precio" style="font-size:13px; font-weight:600; text-align:center"></p>
+          <button class="btn-gris" id="btn-precio-personalizado" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px; font-size:13px">
+            <i data-lucide="tag" style="width:14px;height:14px"></i> Precio personalizado
+          </button>
+          <div class="resumen-linea">
+            <span>Subtotal</span>
+            <span id="venta-subtotal">$0</span>
           </div>
+          <div class="campo">
+            <label>Descuento</label>
+            <div style="display:flex; gap:8px; align-items:center">
+              <input type="number" id="descuento-valor" placeholder="0" min="0" style="flex:1" />
+              <select id="descuento-tipo" style="width:70px">
+                <option value="porcentaje">%</option>
+                <option value="monto">$</option>
+              </select>
+            </div>
+          </div>
+          <div class="resumen-linea">
+            <span>Total</span>
+            <span class="resumen-total" id="venta-total">$0</span>
+          </div>
+          <div class="campo">
+            <label>Fecha de la venta</label>
+            <input type="datetime-local" id="venta-fecha" />
+          </div>
+          <div class="campo">
+            <label>Método de pago</label>
+            <select id="venta-metodo">
+              <option value="efectivo">Efectivo</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
+              <option value="transferencia">Transferencia</option>
+            </select>
+          </div>
+          <div class="campo" id="campo-efectivo">
+            <label>Con cuánto paga</label>
+            <input type="number" id="venta-efectivo" placeholder="Ej: 10000" />
+            <div class="vuelto-box" id="vuelto-box" style="display:none">
+              <span>Vuelto:</span>
+              <span id="venta-vuelto" class="vuelto-valor">$0</span>
+            </div>
+          </div>
+          <div class="campo">
+            <label>Nombre del cliente <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
+            <input type="text" id="venta-cliente" placeholder="Ej: Juan García" />
+          </div>
+          <button class="btn-gris" id="btn-calculadora-tarjeta" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px">
+            <i data-lucide="calculator" style="width:15px;height:15px"></i> Calcular precio con tarjeta
+          </button>
+          <button class="btn-verde" id="btn-confirmar-venta" style="width:100%; margin-top:8px; justify-content:center;">
+            <i data-lucide="check"></i> Confirmar venta
+          </button>
+          <button class="btn-gris" id="btn-cancelar-venta" style="width:100%; justify-content:center;">
+            Cancelar
+          </button>
         </div>
-
-        <button class="btn-gris" id="btn-calculadora-tarjeta" style="width:100%; justify-content:center; display:flex; align-items:center; gap:6px">
-  <i data-lucide="calculator" style="width:15px;height:15px"></i> Calcular precio con tarjeta
-</button>
-
-        <button class="btn-verde" id="btn-confirmar-venta" style="width:100%; margin-top:8px; justify-content:center;">
-          <i data-lucide="check"></i> Confirmar venta
-        </button>
-
-        <button class="btn-gris" id="btn-cancelar-venta" style="width:100%; justify-content:center;">
-          Cancelar
-        </button>
       </div>
     </div>
   </div>
+
+  <!-- TAB HISTORIAL VENTAS -->
+  <div id="tab-content-historial-ventas" style="display:none">
+    <div class="seccion-header" style="margin-bottom:16px">
+      <h3 style="font-size:18px; font-weight:600">Historial de ventas</h3>
+      <button class="btn-gris" id="btn-importar-historial-v2" style="display:flex; align-items:center; gap:6px">
+        <i data-lucide="upload" style="width:15px;height:15px"></i> Importar historial
+      </button>
+    </div>
+    <div class="filtros-bar">
+      <div class="campo" style="flex:1; min-width:140px">
+        <label>Desde</label>
+        <input type="date" id="filtro-desde" />
+      </div>
+      <div class="campo" style="flex:1; min-width:140px">
+        <label>Hasta</label>
+        <input type="date" id="filtro-hasta" />
+      </div>
+      <div class="campo" style="flex:1; min-width:140px">
+        <label>Método de pago</label>
+        <select id="filtro-metodo">
+          <option value="">Todos</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="debito">Débito</option>
+          <option value="credito">Crédito</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+      </div>
+      <div class="campo" style="flex:2; min-width:200px">
+        <label>Buscar por cliente o N° de ticket</label>
+        <input type="text" id="filtro-buscar" placeholder="Ej: Juan García o #15" />
+      </div>
+      <div class="campo" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <div style="display:flex; gap:8px">
+          <button class="btn-verde" id="btn-filtrar" style="align-items:center">
+            <i data-lucide="search" style="width:15px; height:15px"></i> Filtrar
+          </button>
+          <button class="btn-gris" id="btn-limpiar-filtros" style="align-items:center">
+            <i data-lucide="x" style="width:15px; height:15px"></i> Limpiar
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="filtros-resumen" id="filtros-resumen" style="display:none">
+      <span>Mostrando <strong id="filtros-cantidad">0</strong> ventas</span>
+      <span>Total: <strong id="filtros-total" style="color:var(--verde)">$0</strong></span>
+      <span class="info-sensible">Ganancia: <strong id="filtros-ganancia" style="color:var(--verde)">$0</strong></span>
+    </div>
+    <div class="tabla-wrapper">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Ticket N°</th>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Método de pago</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tabla-historial">
+          <tr><td colspan="7" class="tabla-vacia">No hay ventas registradas</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <div id="seccion-historial" style="display:none">
@@ -816,31 +869,95 @@
 
 <!-- SECCIÓN COMPRAS -->
 <div id="seccion-compras" style="display:none">
-  <div class="seccion-header">
-    <h2 class="seccion-titulo">Compras</h2>
-    <button class="btn-verde" id="btn-nueva-compra">
-      <i data-lucide="plus"></i> Nueva compra
+
+  <!-- PESTAÑAS -->
+  <div class="pestañas-wrapper">
+    <button class="pestaña activa" data-tab="nueva-compra-tab" id="tab-nueva-compra-tab">
+      <i data-lucide="shopping-bag" style="width:15px;height:15px"></i> Nueva compra
+    </button>
+    <button class="pestaña" data-tab="historial-compras" id="tab-historial-compras">
+      <i data-lucide="clock" style="width:15px;height:15px"></i> Historial
     </button>
   </div>
 
-  <div class="tabla-wrapper">
-    <table class="tabla">
-      <thead>
-        <tr>
-          <th></th>
-          <th>Fecha</th>
-          <th>Proveedor</th>
-          <th>Método de pago</th>
-          <th>Envío</th>
-          <th>Total</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="tabla-compras">
-        <tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>
-      </tbody>
-    </table>
+  <!-- TAB NUEVA COMPRA -->
+  <div id="tab-content-nueva-compra-tab">
+    <div style="margin-top:16px">
+      <button class="btn-verde" id="btn-nueva-compra">
+        <i data-lucide="plus"></i> Nueva compra
+      </button>
+    </div>
+    <div class="tabla-wrapper" style="margin-top:16px">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Fecha</th>
+            <th>Proveedor</th>
+            <th>Método de pago</th>
+            <th>Envío</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tabla-compras">
+          <tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
+
+  <!-- TAB HISTORIAL COMPRAS -->
+  <div id="tab-content-historial-compras" style="display:none">
+    <div class="filtros-bar" style="margin-top:16px">
+      <div class="campo" style="flex:1; min-width:140px">
+        <label>Desde</label>
+        <input type="date" id="filtro-compras-desde" />
+      </div>
+      <div class="campo" style="flex:1; min-width:140px">
+        <label>Hasta</label>
+        <input type="date" id="filtro-compras-hasta" />
+      </div>
+      <div class="campo" style="flex:1; min-width:140px">
+        <label>Proveedor</label>
+        <input type="text" id="filtro-compras-proveedor" placeholder="Ej: Distribuidora XYZ" />
+      </div>
+      <div class="campo" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <div style="display:flex; gap:8px">
+          <button class="btn-verde" id="btn-filtrar-compras" style="align-items:center">
+            <i data-lucide="search" style="width:15px; height:15px"></i> Filtrar
+          </button>
+          <button class="btn-gris" id="btn-limpiar-filtros-compras" style="align-items:center">
+            <i data-lucide="x" style="width:15px; height:15px"></i> Limpiar
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="filtros-resumen" id="filtros-resumen-compras" style="display:none">
+      <span>Mostrando <strong id="filtros-compras-cantidad">0</strong> compras</span>
+      <span>Total gastado: <strong id="filtros-compras-total" style="color:#dc2626">$0</strong></span>
+    </div>
+    <div class="tabla-wrapper" style="margin-top:8px">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Fecha</th>
+            <th>Proveedor</th>
+            <th>Método de pago</th>
+            <th>Envío</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tabla-historial-compras">
+          <tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <!-- SECCIÓN AJUSTES -->
