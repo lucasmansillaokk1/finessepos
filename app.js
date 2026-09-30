@@ -213,10 +213,10 @@ document.querySelectorAll('.menu-item').forEach(item => {
     if (seccion === 'caja') cargarCaja()
     if (seccion === 'ventas') {
   const ahora = new Date()
-  const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000)
-    .toISOString().slice(0, 16)
+  const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
   document.getElementById('venta-fecha').value = fechaLocal
 }
+if (seccion === 'compras') cargarCompras()
 
 if (seccion === 'compras') cargarCompras()
 
@@ -4371,6 +4371,143 @@ document.getElementById('btn-confirmar-eliminar-compra').addEventListener('click
   mostrarToast('Compra eliminada!')
   cargarCompras()
 })
+
+// ── PESTAÑAS VENTAS ──
+document.querySelectorAll('#seccion-ventas .pestaña').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#seccion-ventas .pestaña').forEach(t => t.classList.remove('activa'))
+    tab.classList.add('activa')
+    const tabId = tab.dataset.tab
+    document.getElementById('tab-content-nueva-venta').style.display = tabId === 'nueva-venta' ? 'block' : 'none'
+    document.getElementById('tab-content-historial-ventas').style.display = tabId === 'historial-ventas' ? 'block' : 'none'
+    if (tabId === 'historial-ventas') cargarHistorial()
+  })
+})
+
+// ── PESTAÑAS COMPRAS ──
+document.querySelectorAll('#seccion-compras .pestaña').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#seccion-compras .pestaña').forEach(t => t.classList.remove('activa'))
+    tab.classList.add('activa')
+    const tabId = tab.dataset.tab
+    document.getElementById('tab-content-nueva-compra-tab').style.display = tabId === 'nueva-compra-tab' ? 'block' : 'none'
+    document.getElementById('tab-content-historial-compras').style.display = tabId === 'historial-compras' ? 'block' : 'none'
+    if (tabId === 'historial-compras') cargarHistorialCompras()
+  })
+})
+
+// ── HISTORIAL COMPRAS ──
+async function cargarHistorialCompras(filtros = {}) {
+  let query = db.from('compras').select('*')
+    .eq('negocio_id', negocioActual.id)
+    .order('fecha', { ascending: false })
+
+  if (filtros.desde) query = query.gte('fecha', filtros.desde + 'T00:00:00')
+  if (filtros.hasta) query = query.lte('fecha', filtros.hasta + 'T23:59:59')
+  if (filtros.proveedor) query = query.ilike('proveedor', `%${filtros.proveedor}%`)
+
+  const { data, error } = await query
+  const tbody = document.getElementById('tabla-historial-compras')
+  const resumen = document.getElementById('filtros-resumen-compras')
+
+  if (error || !data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>'
+    resumen.style.display = 'none'
+    return
+  }
+
+  const totalGastado = data.reduce((acc, c) => acc + Number(c.total), 0)
+  document.getElementById('filtros-compras-cantidad').textContent = data.length
+  document.getElementById('filtros-compras-total').textContent = '$' + totalGastado.toLocaleString('es-AR')
+  resumen.style.display = 'flex'
+
+  tbody.innerHTML = data.map(c => {
+    const fecha = new Date(c.fecha)
+    const fechaTexto = fecha.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'}) + ' - ' + fecha.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'})
+    return `
+      <tr class="fila-venta">
+        <td onclick="toggleDetalleCompra('${c.id}', 'historial')"><button class="btn-expandir" id="flecha-compra-h-${c.id}"><i data-lucide="chevron-right"></i></button></td>
+        <td onclick="toggleDetalleCompra('${c.id}', 'historial')">${fechaTexto}</td>
+        <td onclick="toggleDetalleCompra('${c.id}', 'historial')">${c.proveedor || '-'}</td>
+        <td onclick="toggleDetalleCompra('${c.id}', 'historial')"><span class="badge-metodo">${c.metodo_pago}</span></td>
+        <td onclick="toggleDetalleCompra('${c.id}', 'historial')">${c.costo_envio > 0 ? '$' + Number(c.costo_envio).toLocaleString('es-AR') : '-'}</td>
+        <td onclick="toggleDetalleCompra('${c.id}', 'historial')" style="font-weight:bold; color:#dc2626">$${Number(c.total).toLocaleString('es-AR')}</td>
+        <td><button class="btn-rojo" style="padding:6px 10px" onclick="eliminarCompra('${c.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td>
+      </tr>
+      <tr class="fila-detalle" id="detalle-compra-h-${c.id}" style="display:none">
+        <td colspan="7">
+          <div class="detalle-contenido" id="detalle-compra-h-contenido-${c.id}">Cargando...</div>
+        </td>
+      </tr>
+    `
+  }).join('')
+
+  lucide.createIcons()
+}
+
+document.getElementById('btn-filtrar-compras').addEventListener('click', () => {
+  cargarHistorialCompras({
+    desde: document.getElementById('filtro-compras-desde').value,
+    hasta: document.getElementById('filtro-compras-hasta').value,
+    proveedor: document.getElementById('filtro-compras-proveedor').value.trim()
+  })
+})
+
+document.getElementById('btn-limpiar-filtros-compras').addEventListener('click', () => {
+  document.getElementById('filtro-compras-desde').value = ''
+  document.getElementById('filtro-compras-hasta').value = ''
+  document.getElementById('filtro-compras-proveedor').value = ''
+  document.getElementById('filtros-resumen-compras').style.display = 'none'
+  cargarHistorialCompras()
+})
+
+// Actualizar toggleDetalleCompra para soportar ambas secciones
+async function toggleDetalleCompra(compraId, origen = 'normal') {
+  const sufijo = origen === 'historial' ? 'h-' : ''
+  const fila = document.getElementById(`detalle-compra-${sufijo}${compraId}`)
+  const flecha = document.getElementById(`flecha-compra-${sufijo}${compraId}`)
+  const contenido = document.getElementById(`detalle-compra-${sufijo}contenido-${compraId}`)
+
+  const estaAbierto = fila.style.display === 'table-row'
+  if (estaAbierto) {
+    fila.style.display = 'none'
+    flecha.classList.remove('abierto')
+    return
+  }
+
+  fila.style.display = 'table-row'
+  flecha.classList.add('abierto')
+
+  const { data: items } = await db.from('compra_items').select('*').eq('compra_id', compraId)
+
+  if (!items || items.length === 0) {
+    contenido.innerHTML = '<p style="color:var(--texto-suave); font-size:13px; padding:8px">Sin productos</p>'
+    return
+  }
+
+  contenido.innerHTML = `
+    <table style="width:100%; border-collapse:collapse; font-size:13px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--borde)">
+          <th style="padding:8px 12px; text-align:left; color:var(--texto-suave)">PRODUCTO</th>
+          <th style="padding:8px 12px; text-align:center; color:var(--texto-suave)">CANT.</th>
+          <th style="padding:8px 12px; text-align:right; color:var(--texto-suave)">COSTO UNIT.</th>
+          <th style="padding:8px 12px; text-align:right; color:var(--texto-suave)">SUBTOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(i => `
+          <tr style="border-bottom:1px solid var(--borde)">
+            <td style="padding:10px 12px">${i.nombre_producto}</td>
+            <td style="padding:10px 12px; text-align:center">${i.cantidad}</td>
+            <td style="padding:10px 12px; text-align:right">$${Number(i.precio_unitario).toLocaleString('es-AR')}</td>
+            <td style="padding:10px 12px; text-align:right; color:var(--verde); font-weight:600">$${Number(i.precio_unitario * i.cantidad).toLocaleString('es-AR')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `
+}
 
 lucide.createIcons()
 
