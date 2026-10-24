@@ -623,7 +623,7 @@ document.getElementById('venta-buscar').addEventListener('input', async (e) => {
   }
 
   resultados.innerHTML = data.map(p => `
-    <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-precio-mayor="${p.precio_mayor || 0}" data-precio-revendedor="${p.precio_revendedor || 0}" data-codigo="${p.codigo || ''}">
+    <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-precio-mayor="${p.precio_mayor || 0}" data-precio-revendedor="${p.precio_revendedor || 0}" data-codigo="${p.codigo || ''}" data-costo="${p.costo || 0}">
       <div>
         <div>${p.nombre}</div>
         <div class="resultado-codigo">${p.codigo || 'Sin código'}</div>
@@ -644,7 +644,8 @@ document.getElementById('venta-buscar').addEventListener('input', async (e) => {
       const precioMayor = parseFloat(el.dataset.precioMayor) || null
       const precioRevendedor = parseFloat(el.dataset.precioRevendedor) || null
       const codigo = el.dataset.codigo || null
-      agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo)
+            const costo = parseFloat(el.dataset.costo) || null
+      agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo, costo)
     })
     document.getElementById('venta-buscar').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
@@ -657,7 +658,7 @@ document.getElementById('venta-buscar').addEventListener('input', async (e) => {
 
 // AGREGAR ITEM A LA VENTA
 // Se agrega 'async' al inicio de la función
-async function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo) {
+async function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedor, codigo, costo) {
   document.getElementById('venta-buscar').value = ''
   document.getElementById('venta-resultados').innerHTML = ''
 
@@ -685,6 +686,7 @@ async function agregarItemVenta(id, nombre, precio, precioMayor, precioRevendedo
     precio_mayor: precioMayor || null,
     precio_revendedor: precioRevendedor || null,
     tipo_precio: 'Minorista',
+    costo: costo,
     cantidad: 1,
     codigo: codigo,
     stockDisponible
@@ -929,7 +931,8 @@ const fechaVenta = fechaInput ? new Date(fechaInput).toISOString() : new Date().
       venta_id: venta.id,
       producto_id: i.id,
       nombre_producto: i.nombre,
-      precio_unitario: i.precio,
+            precio_unitario: i.precio,
+      costo_unitario: i.costo ?? null,
       cantidad: i.cantidad,
       codigo: i.codigo || null
     }))
@@ -1609,7 +1612,10 @@ document.getElementById('btn-abrir-ajustes').addEventListener('click', () => {
   document.getElementById('ajustes-email').value = usuarioActual.email || ''
   document.getElementById('ajustes-umbral-mayor').value = negocioActual.umbral_mayor || 3
   document.getElementById('ajustes-umbral-revendedor').value = negocioActual.umbral_revendedor || 5
-  document.getElementById('ajustes-umbral-stock').value = negocioActual.umbral_stock || 5
+    document.getElementById('ajustes-umbral-stock').value = negocioActual.umbral_stock || 5
+  document.getElementById('ajustes-comision-debito').value = negocioActual.comision_debito || ''
+  document.getElementById('ajustes-comision-credito').value = negocioActual.comision_credito || ''
+  document.getElementById('ajustes-comision-transferencia').value = negocioActual.comision_transferencia || ''
   const alertasActivas = negocioActual.alertas_stock !== false
 document.getElementById('ajustes-alertas-stock').checked = alertasActivas
 const inputStock = document.getElementById('ajustes-umbral-stock')
@@ -2114,7 +2120,8 @@ document.getElementById('btn-guardar-precios').addEventListener('click', async (
     umbral_mayor: umbralMayor,
     umbral_revendedor: umbralRevendedor,
     umbral_stock: umbralStock,
-    alertas_stock: alertasStock
+        alertas_stock: alertasStock,
+    ...repLeerComisiones()
   }).eq('id', negocioActual.id)
 
   if (error) {
@@ -2126,7 +2133,8 @@ document.getElementById('btn-guardar-precios').addEventListener('click', async (
   negocioActual.umbral_mayor = umbralMayor
   negocioActual.umbral_revendedor = umbralRevendedor
   negocioActual.umbral_stock = umbralStock
-  negocioActual.alertas_stock = alertasStock
+    negocioActual.alertas_stock = alertasStock
+  Object.assign(negocioActual, repLeerComisiones())
   document.getElementById('ajustes-mensaje-precios').style.color = 'var(--verde)'
   document.getElementById('ajustes-mensaje-precios').textContent = 'Cambios guardados!'
 })
@@ -2588,127 +2596,8 @@ async function generarReporte() {
         </div>
       `).join('')
 
-  document.getElementById('reporte-resultado').style.display = 'block'
-  lucide.createIcons()
-}
-
-async function generarReporte() {
-  const desde = document.getElementById('reporte-desde').value
-  const hasta = document.getElementById('reporte-hasta').value
-
-  if (!desde || !hasta) {
-    mostrarToast('Seleccioná un período', 'error')
-    return
-  }
-
-  const { data: ventas } = await db
-    .from('ventas')
-    .select('*')
-    .eq('negocio_id', negocioActual.id)
-    .gte('fecha', desde + 'T00:00:00')
-    .lte('fecha', hasta + 'T23:59:59')
-
-  if (!ventas || ventas.length === 0) {
-    mostrarToast('No hay ventas en ese período', 'error')
-    document.getElementById('reporte-resultado').style.display = 'none'
-    return
-  }
-
-  const totalVentas = ventas.reduce((acc, v) => acc + Number(v.total), 0)
-  const ticketPromedio = totalVentas / ventas.length
-
-  document.getElementById('reporte-total').textContent = '$' + totalVentas.toLocaleString('es-AR')
-  document.getElementById('reporte-transacciones').textContent = ventas.length
-  document.getElementById('reporte-ticket').textContent = '$' + Math.round(ticketPromedio).toLocaleString('es-AR')
-
-  const metodos = {}
-  ventas.forEach(v => {
-    metodos[v.metodo_pago] = (metodos[v.metodo_pago] || 0) + Number(v.total)
-  })
-
-  const maxMetodo = Math.max(...Object.values(metodos))
-  document.getElementById('reporte-metodos').innerHTML = Object.entries(metodos)
-    .sort((a, b) => b[1] - a[1])
-    .map(([nombre, monto]) => `
-      <div class="metodo-fila metodo-venta-fila">
-        <span class="metodo-nombre">${nombre}</span>
-        <div class="metodo-barra-wrapper">
-          <div class="metodo-barra" style="width:${(monto/maxMetodo*100).toFixed(0)}%"></div>
-        </div>
-        <span class="metodo-monto">$${monto.toLocaleString('es-AR')}</span>
-      </div>
-    `).join('')
-
-  const ventaIds = ventas.map(v => v.id)
-  const { data: items } = await db
-    .from('venta_items')
-    .select('*, productos(costo)')
-    .in('venta_id', ventaIds)
-
-  const resumen = {}
-  let gananciaTotal = 0
-
-  ;(items || []).forEach(i => {
-    const costo = i.productos?.costo || 0
-    const ganancia = (i.precio_unitario - costo) * i.cantidad
-    gananciaTotal += ganancia
-
-    if (!resumen[i.nombre_producto]) {
-      resumen[i.nombre_producto] = { cantidad: 0, total: 0 }
-    }
-    resumen[i.nombre_producto].cantidad += i.cantidad
-    resumen[i.nombre_producto].total += i.precio_unitario * i.cantidad
-  })
-
-  document.getElementById('reporte-ganancia').textContent = '$' + Math.round(gananciaTotal).toLocaleString('es-AR')
-
-  const top = Object.entries(resumen)
-    .sort((a, b) => b[1].cantidad - a[1].cantidad)
-    .slice(0, 5)
-
-  document.getElementById('reporte-top-productos').innerHTML = top.length === 0
-    ? '<p style="color:var(--texto-suave); font-size:14px">Sin datos</p>'
-    : top.map(([nombre, datos], i) => `
-      <div class="top-producto-item">
-        <div class="top-producto-rank">${i + 1}</div>
-        <div class="top-producto-nombre">${nombre}</div>
-        <div class="top-producto-cantidad">${datos.cantidad} uds</div>
-        <div class="top-producto-total">$${Number(datos.total).toLocaleString('es-AR')}</div>
-      </div>
-    `).join('')
-
-  // EGRESOS POR CATEGORÍA
-  const { data: egresosPeriodo } = await db
-    .from('caja')
-    .select('*')
-    .eq('negocio_id', negocioActual.id)
-    .eq('tipo', 'egreso')
-    .gte('fecha', desde + 'T00:00:00')
-    .lte('fecha', hasta + 'T23:59:59')
-
-  const categorias = {}
-  ;(egresosPeriodo || []).forEach(e => {
-    const cat = e.categoria || 'otros'
-    categorias[cat] = (categorias[cat] || 0) + Number(e.monto)
-  })
-
-  const totalEgresosPeriodo = Object.values(categorias).reduce((acc, v) => acc + v, 0)
-
-  document.getElementById('reporte-egresos').innerHTML = Object.keys(categorias).length === 0
-    ? '<p style="color:var(--texto-suave); font-size:14px">Sin egresos en este período</p>'
-    : Object.entries(categorias)
-      .sort((a, b) => b[1] - a[1])
-      .map(([cat, monto]) => `
-        <div class="metodo-fila metodo-egreso-fila">
-          <span class="metodo-nombre" style="text-transform:capitalize">${cat}</span>
-          <div class="metodo-barra-wrapper">
-            <div class="metodo-barra" style="width:${((monto/totalEgresosPeriodo)*100).toFixed(0)}%; background:#7c3aed"></div>
-          </div>
-          <span class="metodo-monto" style="color:#7c3aed">$${monto.toLocaleString('es-AR')}</span>
-        </div>
-      `).join('')
-
-  document.getElementById('reporte-resultado').style.display = 'block'
+    document.getElementById('reporte-resultado').style.display = 'block'
+  await cargarAnalisisReportes(desde, hasta)
   lucide.createIcons()
 }
 
@@ -3893,7 +3782,7 @@ document.getElementById('editar-buscar-producto').addEventListener('input', asyn
   }
 
   resultados.innerHTML = data.map(p => `
-  <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-precio-mayor="${p.precio_mayor || 0}" data-precio-revendedor="${p.precio_revendedor || 0}" data-codigo="${p.codigo || ''}">
+  <div class="resultado-item" data-id="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-precio-mayor="${p.precio_mayor || 0}" data-precio-revendedor="${p.precio_revendedor || 0}" data-codigo="${p.codigo || ''}" data-costo="${p.costo || 0}">
     <div>
       <div>${p.nombre}</div>
       <div class="resultado-codigo">${p.codigo || 'Sin código'}</div>
@@ -3920,7 +3809,9 @@ itemsEditando.push({
   precio_unitario: precio,
   cantidad: 1,
   codigo: el.dataset.codigo || null,
-  nuevo: true
+          nuevo: true,
+        producto_id: el.dataset.id,
+        costo_unitario: parseFloat(el.dataset.costo) || null
 })
       renderizarItemsEditando()
       document.getElementById('editar-buscar-producto').value = ''
@@ -3960,7 +3851,9 @@ document.getElementById('btn-guardar-editar-venta').addEventListener('click', as
   await db.from('venta_items').delete().eq('venta_id', ventaEditando)
   await db.from('venta_items').insert(
     itemsEditando.map(i => ({
-      venta_id: ventaEditando,
+            venta_id: ventaEditando,
+      producto_id: i.producto_id || null,
+      costo_unitario: i.costo_unitario ?? null,
       nombre_producto: i.nombre_producto,
       precio_unitario: i.precio_unitario,
       cantidad: i.cantidad,
@@ -4507,6 +4400,427 @@ async function toggleDetalleCompra(compraId, origen = 'normal') {
       </tbody>
     </table>
   `
+}
+
+// ── ANÁLISIS AVANZADO DE REPORTES ──
+const REP_TZ = 'America/Argentina/Buenos_Aires'
+const REP_DIAS_INACTIVO = 30
+const REP_FIJAS = ['alquiler', 'servicios', 'personal', 'publicidad', 'mantenimiento']
+const REP_TABS = ['resumen', 'rentabilidad', 'inventario', 'compras', 'gastos', 'clientes']
+let repCache = null
+
+const rMoneda = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR')
+const rPct = (n, d = 1) => (Number(n) || 0).toFixed(d).replace('.', ',') + '%'
+const rSuma = (arr, fn) => arr.reduce((a, x) => a + fn(x), 0)
+const rMes = f => new Date(f).toLocaleDateString('en-CA', { timeZone: REP_TZ }).slice(0, 7)
+const rFecha = f => new Date(f).toLocaleDateString('es-AR', { timeZone: REP_TZ })
+const rVacio = msg => `<p class="rep-vacio">${msg}</p>`
+const rNota = msg => `<p class="rep-nota">${msg}</p>`
+const rClase = c => `<span class="rep-clase rep-clase-${c}">${c}</span>`
+const rKpi = (label, valor, color) => `<div class="rep-kpi"><span class="rep-kpi-label">${label}</span><strong class="rep-kpi-valor" ${color ? `style="color:${color}"` : ''}>${valor}</strong></div>`
+const rBarra = (valor, max, color = 'var(--verde)') => `<div class="rep-mini-barra"><div style="width:${max > 0 ? Math.max(2, Math.min(100, (valor / max) * 100)) : 0}%; background:${color}"></div></div>`
+const rTabla = (cab, filas) => `<div class="rep-scroll"><table class="rep-tabla"><thead><tr>${cab.map(c => `<th class="${c.n ? 'num' : ''}">${c.t}</th>`).join('')}</tr></thead><tbody>${filas.map(f => `<tr>${f.map((celda, i) => `<td class="${cab[i].n ? 'num' : ''}">${celda}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+
+// filas ya ordenadas de mayor a menor por "campo"
+function rPareto(filas, campo) {
+  const total = rSuma(filas, f => Math.max(f[campo], 0))
+  let acum = 0
+  return filas.map(f => {
+    const antes = total > 0 ? (acum / total) * 100 : 100
+    acum += Math.max(f[campo], 0)
+    return {
+      ...f,
+      pctTotal: total > 0 ? (Math.max(f[campo], 0) / total) * 100 : 0,
+      pctAcum: total > 0 ? (acum / total) * 100 : 100,
+      clase: antes < 80 ? 'A' : antes < 95 ? 'B' : 'C'
+    }
+  })
+}
+
+// trae todas las filas (Supabase corta en 1000 por consulta)
+async function repTraerTodo(construir) {
+  const todas = []
+  const paso = 1000
+  for (let desde = 0; ; desde += paso) {
+    const { data, error } = await construir().range(desde, desde + paso - 1)
+    if (error) throw error
+    todas.push(...data)
+    if (data.length < paso) break
+  }
+  return todas
+}
+
+function repActivarTab(tab) {
+  document.querySelectorAll('#rep-tabs .pestaña').forEach(b => b.classList.toggle('activa', b.dataset.rep === tab))
+  REP_TABS.forEach(t => {
+    const pane = document.getElementById('rep-pane-' + t)
+    if (pane) pane.style.display = t === tab ? '' : 'none'
+  })
+}
+
+// agrupa lo que ya había en Reportes dentro de la pestaña "Resumen"
+;(function prepararPestanasReporte() {
+  const cont = document.getElementById('reporte-resultado')
+  const resumen = document.createElement('div')
+  resumen.id = 'rep-pane-resumen'
+  Array.from(cont.children).filter(el => !el.classList.contains('rep-nuevo')).forEach(el => resumen.appendChild(el))
+  cont.appendChild(resumen)
+  document.querySelectorAll('#rep-tabs .pestaña').forEach(btn => btn.addEventListener('click', () => repActivarTab(btn.dataset.rep)))
+})()
+
+document.getElementById('rep-muerto-dias').addEventListener('change', () => repRenderStockMuerto())
+
+function repLeerComisiones() {
+  return {
+    comision_debito: parseFloat(document.getElementById('ajustes-comision-debito').value) || 0,
+    comision_credito: parseFloat(document.getElementById('ajustes-comision-credito').value) || 0,
+    comision_transferencia: parseFloat(document.getElementById('ajustes-comision-transferencia').value) || 0
+  }
+}
+
+function repRenderStockMuerto() {
+  if (!repCache) return
+  const dias = parseInt(document.getElementById('rep-muerto-dias').value)
+  const limite = Date.now() - dias * 86400000
+  const { productos, ultimaVenta } = repCache
+  const filas = productos
+    .filter(p => p.stock > 0 && !(ultimaVenta[p.id] >= limite))
+    .map(p => ({ p, inmov: p.stock * (Number(p.costo) || 0) }))
+    .sort((a, b) => b.inmov - a.inmov)
+  const totalInmov = rSuma(filas, f => f.inmov)
+  const valorInventario = rSuma(productos, p => p.stock * (Number(p.costo) || 0))
+  const maxInmov = filas.length ? filas[0].inmov : 0
+  const el = document.getElementById('rep-stock-muerto')
+
+  if (filas.length === 0) {
+    el.innerHTML = rVacio(`Todos tus productos con stock vendieron algo en los últimos ${dias} días.`)
+    return
+  }
+
+  el.innerHTML = `
+    <div class="rep-kpis">
+      ${rKpi('Productos parados', filas.length, '#dc2626')}
+      ${rKpi('Unidades paradas', rSuma(filas, f => f.p.stock))}
+      ${rKpi('Plata inmovilizada (a costo)', rMoneda(totalInmov), '#dc2626')}
+      ${rKpi('% del inventario', rPct(valorInventario > 0 ? (totalInmov / valorInventario) * 100 : 0))}
+    </div>
+    ${rTabla(
+      [{ t: 'Producto' }, { t: 'Stock', n: 1 }, { t: 'Costo', n: 1 }, { t: 'Inmovilizado', n: 1 }, { t: 'Última venta', n: 1 }],
+      filas.slice(0, 15).map(f => [
+        f.p.nombre,
+        f.p.stock,
+        f.p.costo ? rMoneda(f.p.costo) : '-',
+        `${rMoneda(f.inmov)}${rBarra(f.inmov, maxInmov, '#dc2626')}`,
+        ultimaVenta[f.p.id] ? rFecha(ultimaVenta[f.p.id]) : 'Más de 90 días'
+      ])
+    )}
+    ${rNota('Mostrando los 15 con más plata parada. Candidatos a liquidar, de arriba hacia abajo.')}
+  `
+}
+
+async function cargarAnalisisReportes(desde, hasta) {
+  const tIni = new Date(desde + 'T00:00:00Z')
+  const tFin = new Date(hasta + 'T23:59:59Z')
+  const ahora = Date.now()
+  const hace90 = new Date(ahora - 90 * 86400000).toISOString()
+  const hoy = new Date()
+  const hace6m = new Date(hoy.getFullYear(), hoy.getMonth() - 5, 1)
+  const inicioEgresos = (tIni < hace6m ? tIni : hace6m).toISOString()
+  const nid = negocioActual.id
+
+  document.getElementById('rep-neta').innerHTML = rVacio('Calculando...')
+
+  let datos
+  try {
+    datos = await Promise.all([
+      repTraerTodo(() => db.from('productos').select('*').eq('negocio_id', nid).order('id')),
+      repTraerTodo(() => db.from('ventas').select('id, fecha, total, descuento, cliente, metodo_pago').eq('negocio_id', nid).order('fecha').order('id')),
+      repTraerTodo(() => db.from('venta_items').select('cantidad, precio_unitario, costo_unitario, producto_id, nombre_producto, ventas!inner(fecha, negocio_id)').eq('ventas.negocio_id', nid).gte('ventas.fecha', tIni.toISOString()).lte('ventas.fecha', tFin.toISOString()).order('id')),
+      repTraerTodo(() => db.from('venta_items').select('cantidad, producto_id, ventas!inner(fecha, negocio_id)').eq('ventas.negocio_id', nid).gte('ventas.fecha', hace90).order('id')),
+      repTraerTodo(() => db.from('caja').select('monto, categoria, fecha').eq('negocio_id', nid).eq('tipo', 'egreso').gte('fecha', inicioEgresos).order('id')),
+      repTraerTodo(() => db.from('compras').select('id, fecha, proveedor, total, costo_envio').eq('negocio_id', nid).order('id')),
+      repTraerTodo(() => db.from('compra_items').select('producto_id, nombre_producto, cantidad, precio_unitario, compras!inner(fecha, proveedor, negocio_id)').eq('compras.negocio_id', nid).order('id'))
+    ])
+  } catch (e) {
+        console.error('Error en reportes:', e)
+    const detalle = e?.message || JSON.stringify(e)
+    document.getElementById('rep-neta').innerHTML = `<p style="color:#dc2626; font-size:14px"><strong>No se pudo cargar:</strong> ${detalle}</p>`
+    mostrarToast('Error al cargar el análisis: ' + detalle, 'error')
+    return
+  }
+
+  const [productos, ventasTodas, itemsPeriodo, itemsRecientes, egresos, compras, itemsCompra] = datos
+  const prodPorId = {}
+  productos.forEach(p => { prodPorId[p.id] = p })
+  const costoItem = i => i.costo_unitario ?? prodPorId[i.producto_id]?.costo ?? null
+  const enPeriodo = f => { const d = new Date(f); return d >= tIni && d <= tFin }
+  const ventasPeriodo = ventasTodas.filter(v => enPeriodo(v.fecha))
+  const egresosPeriodo = egresos.filter(e => enPeriodo(e.fecha))
+  const comprasPeriodo = compras.filter(c => enPeriodo(c.fecha))
+  const totalVentas = rSuma(ventasPeriodo, v => Number(v.total))
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1)
+
+  // ───────── RENTABILIDAD ─────────
+  const costoMerc = rSuma(itemsPeriodo, i => (Number(costoItem(i)) || 0) * i.cantidad)
+  const sinCosto = itemsPeriodo.filter(i => costoItem(i) === null).length
+  const totalGastos = rSuma(egresosPeriodo, e => Number(e.monto))
+  const totalEnvios = rSuma(comprasPeriodo, c => Number(c.costo_envio || 0))
+  const neta = totalVentas - costoMerc - totalGastos - totalEnvios
+  const fijos = rSuma(egresosPeriodo.filter(e => REP_FIJAS.includes(e.categoria)), e => Number(e.monto))
+  const margenBruto = totalVentas > 0 ? (totalVentas - costoMerc) / totalVentas : 0
+  const equilibrio = margenBruto > 0 ? fijos / margenBruto : 0
+  const avance = equilibrio > 0 ? (totalVentas / equilibrio) * 100 : 0
+
+  document.getElementById('rep-neta').innerHTML = `
+    <div class="rep-kpis">
+      ${rKpi('Ventas', rMoneda(totalVentas), 'var(--verde)')}
+      ${rKpi('Costo de mercadería vendida', '-' + rMoneda(costoMerc), '#dc2626')}
+      ${rKpi('Gastos (egresos de caja)', '-' + rMoneda(totalGastos), '#dc2626')}
+      ${rKpi('Envíos de compras', '-' + rMoneda(totalEnvios), '#dc2626')}
+      ${rKpi('Ganancia neta real', rMoneda(neta), neta >= 0 ? 'var(--verde)' : '#dc2626')}
+    </div>
+    ${sinCosto > 0 ? rNota(`Atención: ${sinCosto} items vendidos no tienen costo (no están vinculados a un producto) y cuentan con costo $0.`) : ''}
+    <div class="rep-equilibrio">
+      <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px">
+        <strong>Punto de equilibrio del período</strong>
+        <strong>${fijos > 0 && equilibrio > 0 ? rMoneda(equilibrio) : '-'}</strong>
+      </div>
+      ${fijos > 0 && equilibrio > 0 ? `
+        <div class="rep-progreso"><div style="width:${Math.min(avance, 100)}%; background:${avance >= 100 ? 'var(--verde)' : '#f59e0b'}"></div></div>
+        <span style="font-size:13px">${avance >= 100 ? `Lo superaste por ${rMoneda(totalVentas - equilibrio)}` : `Te faltan ${rMoneda(equilibrio - totalVentas)} (${rPct(avance, 0)} cubierto)`}</span>
+        ${rNota(`Gastos fijos del período ${rMoneda(fijos)} ÷ margen bruto ${rPct(margenBruto * 100)}. Se consideran fijos: alquiler, servicios, personal, publicidad y mantenimiento. Para que sea mensual, generá el reporte de "Este mes".`)}
+      ` : rVacio('Registrá egresos de alquiler, servicios, personal, publicidad o mantenimiento en el período para calcularlo.')}
+    </div>
+    ${rNota('Si registrás compras de mercadería también como egreso de caja, se cuentan dos veces (en el costo de mercadería y en gastos).')}
+  `
+
+  // Pareto de productos por margen de contribución
+  const agrup = {}
+  itemsPeriodo.forEach(i => {
+    const k = i.producto_id || i.nombre_producto
+    if (!agrup[k]) agrup[k] = { nombre: i.nombre_producto, unidades: 0, ventas: 0, costo: 0 }
+    agrup[k].unidades += i.cantidad
+    agrup[k].ventas += Number(i.precio_unitario) * i.cantidad
+    agrup[k].costo += (Number(costoItem(i)) || 0) * i.cantidad
+  })
+  const filasProd = Object.values(agrup)
+    .map(g => ({ ...g, ganancia: g.ventas - g.costo, margen: g.ventas > 0 ? ((g.ventas - g.costo) / g.ventas) * 100 : 0 }))
+    .sort((a, b) => b.ganancia - a.ganancia)
+  const paretoProd = rPareto(filasProd, 'ganancia')
+  document.getElementById('rep-pareto-productos').innerHTML = paretoProd.length === 0 ? rVacio('Sin ventas en el período.') : `
+    ${rTabla(
+      [{ t: '#' }, { t: 'Producto' }, { t: 'Unid.', n: 1 }, { t: 'Ventas', n: 1 }, { t: 'Ganancia', n: 1 }, { t: 'Margen', n: 1 }, { t: '% acum.', n: 1 }, { t: 'Clase' }],
+      paretoProd.slice(0, 15).map((f, i) => [i + 1, f.nombre, f.unidades, rMoneda(f.ventas), rMoneda(f.ganancia), rPct(f.margen), rPct(f.pctAcum, 0), rClase(f.clase)])
+    )}
+    ${rNota('Clase A: los productos que juntos hacen el 80% de tu ganancia (donde conviene concentrar la inversión). B: hasta el 95%. C: el resto. Se calcula con el precio de lista de cada item, antes de descuentos.')}
+  `
+
+  // Costo de reposición vs costo cargado
+  const ultimaCompra = {}
+  itemsCompra.forEach(ic => {
+    if (!ic.producto_id) return
+    const t = new Date(ic.compras.fecha).getTime()
+    if (!ultimaCompra[ic.producto_id] || t > ultimaCompra[ic.producto_id].t) ultimaCompra[ic.producto_id] = { t, costo: Number(ic.precio_unitario) }
+  })
+  const repos = Object.entries(ultimaCompra).map(([id, u]) => {
+    const p = prodPorId[id]
+    if (!p || !p.costo || !p.precio) return null
+    const dif = ((u.costo - p.costo) / p.costo) * 100
+    return { p, u, dif, margenCargado: ((p.precio - p.costo) / p.precio) * 100, margenReal: ((p.precio - u.costo) / p.precio) * 100 }
+  }).filter(f => f && Math.abs(f.dif) >= 0.5).sort((a, b) => b.dif - a.dif)
+  document.getElementById('rep-reposicion-costos').innerHTML = repos.length === 0
+    ? rVacio('Todavía no hay compras registradas que cambien el costo de tus productos.')
+    : `${rTabla(
+        [{ t: 'Producto' }, { t: 'Costo cargado', n: 1 }, { t: 'Última compra', n: 1 }, { t: 'Variación', n: 1 }, { t: 'Margen hoy', n: 1 }, { t: 'Margen real', n: 1 }],
+        repos.slice(0, 15).map(f => [
+          f.p.nombre, rMoneda(f.p.costo), `${rMoneda(f.u.costo)} (${rFecha(f.u.t)})`,
+          `<span style="color:${f.dif > 0 ? '#dc2626' : 'var(--verde)'}; font-weight:600">${f.dif > 0 ? '+' : ''}${rPct(f.dif)}</span>`,
+          rPct(f.margenCargado), `<strong>${rPct(f.margenReal)}</strong>`
+        ])
+      )}${rNota('Si la última compra salió más cara que el costo cargado, tu margen real es menor al que ves en Productos. Revisá esos precios.')}`
+
+  // Descuentos y cortesías
+  const totalDesc = rSuma(ventasPeriodo, v => Number(v.descuento || 0))
+  const cortesias = itemsPeriodo.filter(i => Number(i.precio_unitario) === 0)
+  const valorCortesias = rSuma(cortesias, i => i.cantidad * (Number(prodPorId[i.producto_id]?.precio) || 0))
+  const brutas = totalVentas + totalDesc
+  document.getElementById('rep-descuentos').innerHTML = `
+    <div class="rep-kpis">
+      ${rKpi('Descuentos otorgados', rMoneda(totalDesc), '#dc2626')}
+      ${rKpi('% sobre ventas brutas', rPct(brutas > 0 ? (totalDesc / brutas) * 100 : 0))}
+      ${rKpi('Cortesías (unidades)', rSuma(cortesias, i => i.cantidad))}
+      ${rKpi('Valor regalado (precio menor)', rMoneda(valorCortesias), '#dc2626')}
+    </div>
+    ${rNota('Cortesías = items vendidos a $0. Los precios personalizados todavía no se pueden medir porque la venta no guarda qué tipo de precio se usó.')}
+  `
+
+  // ───────── INVENTARIO ─────────
+  const hace30 = ahora - 30 * 86400000
+  const vendido30 = {}
+  const ultimaVenta = {}
+  itemsRecientes.forEach(i => {
+    if (!i.producto_id) return
+    const t = new Date(i.ventas.fecha).getTime()
+    if (t >= hace30) vendido30[i.producto_id] = (vendido30[i.producto_id] || 0) + i.cantidad
+    if (!ultimaVenta[i.producto_id] || t > ultimaVenta[i.producto_id]) ultimaVenta[i.producto_id] = t
+  })
+  const filasDias = productos
+    .filter(p => vendido30[p.id] > 0)
+    .map(p => {
+      const tasa = vendido30[p.id] / 30
+      return { p, tasa, dias: p.stock / tasa, reponer: Math.max(0, Math.ceil(tasa * 30 - p.stock)) }
+    })
+    .filter(f => f.dias <= 30)
+    .sort((a, b) => a.dias - b.dias)
+  document.getElementById('rep-dias-stock').innerHTML = filasDias.length === 0
+    ? rVacio('Ningún producto con ventas se agota en los próximos 30 días.')
+    : `${rTabla(
+        [{ t: 'Producto' }, { t: 'Stock', n: 1 }, { t: 'Vende por día', n: 1 }, { t: 'Días restantes', n: 1 }, { t: 'Reponer (para 30 días)', n: 1 }],
+        filasDias.slice(0, 15).map(f => [
+          f.p.nombre, f.p.stock, f.tasa.toFixed(2).replace('.', ','),
+          `<span style="font-weight:700; color:${f.dias <= 7 ? '#dc2626' : f.dias <= 15 ? '#b45309' : 'var(--verde)'}">${f.dias <= 0 ? 'Agotado' : Math.floor(f.dias)}</span>`,
+          f.reponer > 0 ? `<strong>${f.reponer}</strong>` : '-'
+        ])
+      )}${rNota('Se calcula con lo que vendiste en los últimos 30 días. "Reponer" es lo que falta para cubrir 30 días más de ventas.')}`
+
+  repCache = { productos, ultimaVenta }
+  repRenderStockMuerto()
+
+  // ───────── COMPRAS ─────────
+  const porProv = {}
+  comprasPeriodo.forEach(c => {
+    const k = (c.proveedor || 'Sin proveedor').trim()
+    if (!porProv[k]) porProv[k] = { nombre: k, compras: 0, monto: 0 }
+    porProv[k].compras++
+    porProv[k].monto += Number(c.total)
+  })
+  const paretoProv = rPareto(Object.values(porProv).sort((a, b) => b.monto - a.monto), 'monto')
+  document.getElementById('rep-pareto-proveedores').innerHTML = paretoProv.length === 0
+    ? rVacio('No hay compras registradas en el período.')
+    : `${rTabla(
+        [{ t: 'Proveedor' }, { t: 'Compras', n: 1 }, { t: 'Monto', n: 1 }, { t: '% del total', n: 1 }, { t: '% acum.', n: 1 }, { t: 'Clase' }],
+        paretoProv.map(f => [f.nombre, f.compras, rMoneda(f.monto), rPct(f.pctTotal), rPct(f.pctAcum, 0), rClase(f.clase)])
+      )}${rNota('Los proveedores clase A concentran el 80% de lo que comprás: son los que más te importan negociar.')}`
+
+  const porProdCompra = {}
+  itemsCompra.filter(ic => enPeriodo(ic.compras.fecha)).forEach(ic => {
+    const k = ic.producto_id || ic.nombre_producto
+    if (!porProdCompra[k]) porProdCompra[k] = { nombre: ic.nombre_producto, unidades: 0, monto: 0 }
+    porProdCompra[k].unidades += ic.cantidad
+    porProdCompra[k].monto += ic.cantidad * Number(ic.precio_unitario)
+  })
+  const paretoCompraProd = rPareto(Object.values(porProdCompra).sort((a, b) => b.monto - a.monto), 'monto')
+  document.getElementById('rep-pareto-compras-productos').innerHTML = paretoCompraProd.length === 0
+    ? rVacio('No hay compras registradas en el período.')
+    : rTabla(
+        [{ t: '#' }, { t: 'Producto' }, { t: 'Unid.', n: 1 }, { t: 'Monto', n: 1 }, { t: '% del total', n: 1 }, { t: '% acum.', n: 1 }, { t: 'Clase' }],
+        paretoCompraProd.slice(0, 15).map((f, i) => [i + 1, f.nombre, f.unidades, rMoneda(f.monto), rPct(f.pctTotal), rPct(f.pctAcum, 0), rClase(f.clase)])
+      )
+
+  // ───────── GASTOS ─────────
+  const porCat = {}
+  egresosPeriodo.forEach(e => { const c = e.categoria || 'otros'; porCat[c] = (porCat[c] || 0) + Number(e.monto) })
+  const filasCat = Object.entries(porCat).sort((a, b) => b[1] - a[1])
+  document.getElementById('rep-gastos-periodo').innerHTML = filasCat.length === 0
+    ? rVacio('Sin gastos en el período.')
+    : `<div class="rep-kpis">
+        ${rKpi('Gastos totales', rMoneda(totalGastos), '#dc2626')}
+        ${rKpi('% de las ventas', rPct(totalVentas > 0 ? (totalGastos / totalVentas) * 100 : 0))}
+      </div>
+      ${rTabla(
+        [{ t: 'Categoría' }, { t: 'Monto', n: 1 }, { t: '% de las ventas', n: 1 }, { t: '% de los gastos', n: 1 }],
+        filasCat.map(([c, m]) => [cap(c), rMoneda(m), rPct(totalVentas > 0 ? (m / totalVentas) * 100 : 0), rPct(totalGastos > 0 ? (m / totalGastos) * 100 : 0)])
+      )}`
+
+  const meses = []
+  for (let k = 5; k >= 0; k--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - k, 1)
+    meses.push({ clave: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' }) })
+  }
+  const cats = [...new Set(egresos.map(e => e.categoria || 'otros'))]
+  const gastoMes = {}
+  egresos.forEach(e => {
+    const c = e.categoria || 'otros'
+    const m = rMes(e.fecha)
+    gastoMes[c] = gastoMes[c] || {}
+    gastoMes[c][m] = (gastoMes[c][m] || 0) + Number(e.monto)
+  })
+  const ventasMes = {}
+  ventasTodas.forEach(v => { const m = rMes(v.fecha); ventasMes[m] = (ventasMes[m] || 0) + Number(v.total) })
+  const totGasto = m => rSuma(cats, c => gastoMes[c]?.[m] || 0)
+  document.getElementById('rep-gastos-evolucion').innerHTML = cats.length === 0
+    ? rVacio('Sin gastos en los últimos 6 meses.')
+    : rTabla(
+        [{ t: 'Categoría' }, ...meses.map(m => ({ t: m.label, n: 1 }))],
+        [
+          ...cats.map(c => [cap(c), ...meses.map(m => gastoMes[c]?.[m.clave] ? rMoneda(gastoMes[c][m.clave]) : '-')]),
+          ['<strong>Total gastos</strong>', ...meses.map(m => `<strong>${rMoneda(totGasto(m.clave))}</strong>`)],
+          ['Ventas', ...meses.map(m => rMoneda(ventasMes[m.clave] || 0))],
+          ['<strong>Gastos / ventas</strong>', ...meses.map(m => ventasMes[m.clave] > 0 ? `<strong>${rPct((totGasto(m.clave) / ventasMes[m.clave]) * 100)}</strong>` : '-')]
+        ]
+      )
+
+  const comPct = { efectivo: 0, debito: Number(negocioActual.comision_debito || 0), credito: Number(negocioActual.comision_credito || 0), transferencia: Number(negocioActual.comision_transferencia || 0) }
+  const porMetodo = {}
+  ventasPeriodo.forEach(v => { porMetodo[v.metodo_pago] = (porMetodo[v.metodo_pago] || 0) + Number(v.total) })
+  const filasCom = Object.entries(porMetodo).map(([m, monto]) => ({ m, monto, p: comPct[m] || 0, costo: (monto * (comPct[m] || 0)) / 100 }))
+  const totalCom = rSuma(filasCom, f => f.costo)
+  document.getElementById('rep-comisiones').innerHTML = filasCom.length === 0 ? rVacio('Sin ventas en el período.') : `
+    <div class="rep-kpis">
+      ${rKpi('Te comieron en comisiones', rMoneda(totalCom), '#dc2626')}
+      ${rKpi('% de las ventas', rPct(totalVentas > 0 ? (totalCom / totalVentas) * 100 : 0))}
+    </div>
+    ${rTabla(
+      [{ t: 'Método' }, { t: 'Vendido', n: 1 }, { t: 'Comisión', n: 1 }, { t: 'Costo', n: 1 }],
+      filasCom.sort((a, b) => b.monto - a.monto).map(f => [cap(f.m), rMoneda(f.monto), rPct(f.p, 2), rMoneda(f.costo)])
+    )}
+    ${totalCom === 0 ? rNota('Cargá los porcentajes de débito, crédito y transferencia en Ajustes → Configuración de precios. Para crédito usá un promedio, porque la venta no guarda en cuántas cuotas se pagó.') : ''}
+  `
+
+  // ───────── CLIENTES ─────────
+  const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+  const idxDia = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }
+  const porDia = dias.map(() => ({ ventas: 0, total: 0 }))
+  ventasPeriodo.forEach(v => {
+    const k = idxDia[new Date(v.fecha).toLocaleDateString('en-US', { weekday: 'short', timeZone: REP_TZ })]
+    porDia[k].ventas++
+    porDia[k].total += Number(v.total)
+  })
+  const maxDia = Math.max(...porDia.map(d => d.total), 0)
+  const minDia = Math.min(...porDia.map(d => d.total))
+  document.getElementById('rep-dia-semana').innerHTML = ventasPeriodo.length === 0 ? rVacio('Sin ventas en el período.') : `
+    ${dias.map((d, i) => `
+      <div class="metodo-fila">
+        <span class="metodo-nombre" style="width:50px">${d}</span>
+        <div class="metodo-barra-wrapper"><div class="metodo-barra" style="width:${maxDia > 0 ? (porDia[i].total / maxDia) * 100 : 0}%; background:${porDia[i].total === maxDia ? 'var(--verde)' : porDia[i].total === minDia ? '#dc2626' : '#f59e0b'}"></div></div>
+        <span class="metodo-monto" style="width:170px">${rMoneda(porDia[i].total)} · ${porDia[i].ventas} ventas</span>
+      </div>`).join('')}
+    ${rNota('Verde: tu mejor día. Rojo: el más flojo (buen candidato para publicitar o armar promos).')}
+  `
+
+  const clientes = {}
+  const ventasConCliente = ventasTodas.filter(v => v.cliente && v.cliente.trim())
+  ventasConCliente.forEach(v => {
+    const k = v.cliente.trim().toUpperCase()
+    if (!clientes[k]) clientes[k] = { nombre: k, compras: 0, total: 0, ultima: 0 }
+    clientes[k].compras++
+    clientes[k].total += Number(v.total)
+    clientes[k].ultima = Math.max(clientes[k].ultima, new Date(v.fecha).getTime())
+  })
+  const listaClientes = Object.values(clientes).map(c => ({ ...c, dias: Math.floor((ahora - c.ultima) / 86400000) }))
+  const notaClientes = rNota(`Cargaste el nombre del cliente en ${rPct(ventasTodas.length > 0 ? (ventasConCliente.length / ventasTodas.length) * 100 : 0, 0)} de tus ventas. Cuanto más completes, más útil esta lista.`)
+  document.getElementById('rep-clientes-top').innerHTML = listaClientes.length === 0 ? rVacio('Todavía no hay ventas con cliente cargado.') : `
+    ${rTabla(
+      [{ t: 'Cliente' }, { t: 'Compras', n: 1 }, { t: 'Total gastado', n: 1 }, { t: 'Ticket prom.', n: 1 }, { t: 'Última compra', n: 1 }, { t: 'Hace', n: 1 }],
+      [...listaClientes].sort((a, b) => b.total - a.total).slice(0, 15).map(c => [c.nombre, c.compras, rMoneda(c.total), rMoneda(c.total / c.compras), rFecha(c.ultima), `${c.dias} d`])
+    )}${notaClientes}`
+  const inactivos = listaClientes.filter(c => c.dias > REP_DIAS_INACTIVO).sort((a, b) => b.total - a.total).slice(0, 15)
+  document.getElementById('rep-clientes-inactivos').innerHTML = inactivos.length === 0
+    ? rVacio(`Todos tus clientes compraron en los últimos ${REP_DIAS_INACTIVO} días.`)
+    : `${rTabla(
+        [{ t: 'Cliente' }, { t: 'Compras', n: 1 }, { t: 'Total gastado', n: 1 }, { t: 'Última compra', n: 1 }, { t: 'Días sin comprar', n: 1 }],
+        inactivos.map(c => [c.nombre, c.compras, rMoneda(c.total), rFecha(c.ultima), `<strong>${c.dias}</strong>`])
+      )}${rNota(`Clientes sin comprar hace más de ${REP_DIAS_INACTIVO} días, ordenados por lo que te dejaron. Lista lista para escribirles o ofrecerles algo.`)}`
 }
 
 lucide.createIcons()
