@@ -813,6 +813,54 @@
   <!-- RESULTADO -->
   <div id="reporte-resultado" style="display:none">
 
+    <div class="pestañas-wrapper rep-nuevo" id="rep-tabs" style="flex-wrap:wrap">
+      <button class="pestaña activa" data-rep="resumen">Resumen</button>
+      <button class="pestaña" data-rep="rentabilidad">Rentabilidad</button>
+      <button class="pestaña" data-rep="inventario">Inventario</button>
+      <button class="pestaña" data-rep="compras">Compras</button>
+      <button class="pestaña" data-rep="gastos">Gastos</button>
+      <button class="pestaña" data-rep="clientes">Clientes</button>
+    </div>
+
+    <div class="rep-pane rep-nuevo" id="rep-pane-rentabilidad" style="display:none">
+      <div class="grafico-card"><h3 class="grafico-titulo">Ganancia neta real y punto de equilibrio</h3><div id="rep-neta"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Pareto de productos (margen de contribución)</h3><div id="rep-pareto-productos"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Costo de reposición vs costo cargado</h3><div id="rep-reposicion-costos"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Descuentos y cortesías</h3><div id="rep-descuentos"></div></div>
+    </div>
+
+    <div class="rep-pane rep-nuevo" id="rep-pane-inventario" style="display:none">
+      <div class="grafico-card"><h3 class="grafico-titulo">Días de stock y reposición sugerida</h3><div id="rep-dias-stock"></div></div>
+      <div class="grafico-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px">
+          <h3 class="grafico-titulo" style="margin:0">Stock muerto (plata inmovilizada)</h3>
+          <select id="rep-muerto-dias" style="width:auto">
+            <option value="30">Sin ventas hace 30 días</option>
+            <option value="60" selected>Sin ventas hace 60 días</option>
+            <option value="90">Sin ventas hace 90 días</option>
+          </select>
+        </div>
+        <div id="rep-stock-muerto"></div>
+      </div>
+    </div>
+
+    <div class="rep-pane rep-nuevo" id="rep-pane-compras" style="display:none">
+      <div class="grafico-card"><h3 class="grafico-titulo">Pareto de proveedores</h3><div id="rep-pareto-proveedores"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Pareto de productos comprados</h3><div id="rep-pareto-compras-productos"></div></div>
+    </div>
+
+    <div class="rep-pane rep-nuevo" id="rep-pane-gastos" style="display:none">
+      <div class="grafico-card"><h3 class="grafico-titulo">Gastos del período como % de las ventas</h3><div id="rep-gastos-periodo"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Evolución mensual por categoría (6 meses)</h3><div id="rep-gastos-evolucion"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Comisiones por método de pago</h3><div id="rep-comisiones"></div></div>
+    </div>
+
+    <div class="rep-pane rep-nuevo" id="rep-pane-clientes" style="display:none">
+      <div class="grafico-card"><h3 class="grafico-titulo">Ventas por día de la semana</h3><div id="rep-dia-semana"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Mejores clientes</h3><div id="rep-clientes-top"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Clientes que dejaron de comprar</h3><div id="rep-clientes-inactivos"></div></div>
+    </div>
+
     <div style="display:flex; justify-content:flex-end; margin-bottom:16px">
   <button class="btn-verde" id="btn-descargar-reporte-pdf" style="justify-content:center; display:flex; align-items:center; gap:6px">
     <i data-lucide="file-down" style="width:15px;height:15px"></i> Descargar PDF
@@ -1112,6 +1160,15 @@
   </div>
   <p style="font-size:12px; color:var(--texto-suave); margin-top:4px">Activá o desactivá las alertas de stock bajo.</p>
 </div>
+      <div class="campo">
+        <label>Comisión por método de pago (%)</label>
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px">
+          <input type="number" id="ajustes-comision-debito" min="0" step="0.01" placeholder="Débito" />
+          <input type="number" id="ajustes-comision-credito" min="0" step="0.01" placeholder="Crédito" />
+          <input type="number" id="ajustes-comision-transferencia" min="0" step="0.01" placeholder="Transf." />
+        </div>
+        <p style="font-size:12px; color:var(--texto-suave); margin-top:4px">Lo que te descuenta el banco o MercadoPago por cada venta. Se usa en Reportes → Gastos.</p>
+      </div>
       <button class="btn-verde" id="btn-guardar-precios" style="justify-content:center; margin-top:8px">
         <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
       </button>
