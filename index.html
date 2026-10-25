@@ -473,14 +473,22 @@
               <option value="transferencia">Transferencia</option>
             </select>
           </div>
+          <div class="campo" id="campo-mixto" style="display:none">
+  <label>Pago dividido</label>
+  <input type="number" id="venta-mixto-efectivo" placeholder="¿Cuánto paga en efectivo?" min="0" />
+  <div class="vuelto-box" style="margin-top:8px">
+    <span>Resto por transferencia:</span>
+    <span id="venta-mixto-transferencia" class="vuelto-valor">$0</span>
+  </div>
+</div>
           <div class="campo" id="campo-efectivo">
             <label>Con cuánto paga</label>
             <input type="number" id="venta-efectivo" placeholder="Ej: 10000" />
             <div class="vuelto-box" id="vuelto-box" style="display:none">
               <span>Vuelto:</span>
               <span id="venta-vuelto" class="vuelto-valor">$0</span>
-            </div>
-          </div>
+  </div>
+</div>
           <div class="campo">
             <label>Nombre del cliente <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label>
             <input type="text" id="venta-cliente" placeholder="Ej: Juan García" />
@@ -550,16 +558,17 @@
     <div class="tabla-wrapper">
       <table class="tabla">
         <thead>
-          <tr>
-            <th></th>
-            <th>Ticket N°</th>
-            <th>Fecha</th>
-            <th>Cliente</th>
-            <th>Método de pago</th>
-            <th>Total</th>
-            <th></th>
-          </tr>
-        </thead>
+  <tr>
+    <th></th>
+    <th>Ticket N°</th>
+    <th>Fecha</th>
+    <th>Cliente</th>
+    <th>Método de pago</th>
+    <th>Total</th>
+    <th>Ganancia 🔒</th>
+    <th></th>
+  </tr>
+</thead>
         <tbody id="tabla-historial">
           <tr><td colspan="7" class="tabla-vacia">No hay ventas registradas</td></tr>
         </tbody>
@@ -824,6 +833,7 @@
 
     <div class="rep-pane rep-nuevo" id="rep-pane-rentabilidad" style="display:none">
       <div class="grafico-card"><h3 class="grafico-titulo">Ganancia neta real y punto de equilibrio</h3><div id="rep-neta"></div></div>
+      <div class="grafico-card"><h3 class="grafico-titulo">Punto de equilibrio</h3><div id="rep-equilibrio-nuevo"></div></div>
       <div class="grafico-card"><h3 class="grafico-titulo">Pareto de productos (margen de contribución)</h3><div id="rep-pareto-productos"></div></div>
       <div class="grafico-card"><h3 class="grafico-titulo">Costo de reposición vs costo cargado</h3><div id="rep-reposicion-costos"></div></div>
       <div class="grafico-card"><h3 class="grafico-titulo">Descuentos y cortesías</h3><div id="rep-descuentos"></div></div>
@@ -930,28 +940,36 @@
 
   <!-- TAB NUEVA COMPRA -->
   <div id="tab-content-nueva-compra-tab">
-    <div style="margin-top:16px">
-      <button class="btn-verde" id="btn-nueva-compra">
+    <div class="cards-grid" style="margin-top:16px; margin-bottom:20px">
+      <div class="card">
+        <i data-lucide="shopping-bag" class="card-icon"></i>
+        <span class="card-label">Comprado este mes</span>
+        <span class="card-valor" id="compras-card-total">$0</span>
+      </div>
+      <div class="card">
+        <i data-lucide="receipt" class="card-icon"></i>
+        <span class="card-label">Compras del mes</span>
+        <span class="card-valor" id="compras-card-cantidad">0</span>
+      </div>
+      <div class="card">
+        <i data-lucide="truck" class="card-icon"></i>
+        <span class="card-label">Envíos del mes</span>
+        <span class="card-valor" id="compras-card-envios">$0</span>
+      </div>
+      <div class="card">
+        <i data-lucide="store" class="card-icon"></i>
+        <span class="card-label">Proveedor principal</span>
+        <span class="card-valor" id="compras-card-proveedor" style="font-size:18px">-</span>
+      </div>
+    </div>
+
+    <div class="panel-cobro" style="max-width:520px">
+      <h3>Registrar compra</h3>
+      <p style="font-size:13px; color:var(--texto-suave)">Cargá mercadería nueva o reposición. El stock se suma solo al registrar.</p>
+      <button class="btn-verde" id="btn-nueva-compra" style="justify-content:center">
         <i data-lucide="plus"></i> Nueva compra
       </button>
-    </div>
-    <div class="tabla-wrapper" style="margin-top:16px">
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th></th>
-            <th>Fecha</th>
-            <th>Proveedor</th>
-            <th>Método de pago</th>
-            <th>Envío</th>
-            <th>Total</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="tabla-compras">
-          <tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>
-        </tbody>
-      </table>
+      <p id="compras-ultima" style="font-size:13px; color:var(--texto-suave); text-align:center"></p>
     </div>
   </div>
 
@@ -1084,6 +1102,26 @@
     <i data-lucide="check" style="width:15px;height:15px"></i> Guardar logo
   </button>
   <p id="ajustes-mensaje-logo" style="font-size:13px; text-align:center; min-height:18px"></p>
+</div>
+
+<!-- CARD EQUILIBRIO -->
+<div class="ajuste-card">
+  <h3 class="ajuste-card-titulo">
+    <i data-lucide="scale" style="width:18px;height:18px"></i>
+    Punto de equilibrio
+  </h3>
+  <p style="font-size:13px; color:var(--texto-suave)">Cargá tus costos fijos mensuales. En Reportes → Rentabilidad se calcula cuánto tenés que vender, en pesos y en unidades.</p>
+  <div class="campo"><label>Alquiler (por mes)</label><input type="number" id="eq-alquiler" min="0" placeholder="Ej: 150000" /></div>
+  <div class="campo"><label>Sueldos / personal (por mes)</label><input type="number" id="eq-personal" min="0" placeholder="Ej: 200000" /></div>
+  <div class="campo"><label>Servicios: luz, internet, etc. (por mes)</label><input type="number" id="eq-servicios" min="0" placeholder="Ej: 40000" /></div>
+  <div class="campo"><label>Publicidad (por mes)</label><input type="number" id="eq-publicidad" min="0" placeholder="Ej: 30000" /></div>
+  <div class="campo"><label>Otros costos fijos (por mes)</label><input type="number" id="eq-otros" min="0" placeholder="Ej: 20000" /></div>
+  <div class="campo"><label>Impuestos y comisiones sobre ventas (%)</label><input type="number" id="eq-variables" min="0" step="0.01" placeholder="Ej: 5" /></div>
+  <div class="campo"><label>Ganancia que querés sacar por mes <span style="color:var(--texto-suave); font-weight:400">(opcional)</span></label><input type="number" id="eq-objetivo" min="0" placeholder="Ej: 300000" /></div>
+  <button class="btn-verde" id="btn-guardar-equilibrio" style="justify-content:center; margin-top:8px">
+    <i data-lucide="check" style="width:15px;height:15px"></i> Guardar
+  </button>
+  <p id="ajustes-mensaje-equilibrio" style="font-size:13px; text-align:center; min-height:18px"></p>
 </div>
 
     <!-- CARD 5: SEGURIDAD -->
