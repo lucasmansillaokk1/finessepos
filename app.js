@@ -703,8 +703,10 @@ function renderizarItemsVenta() {
 
   if (itemsVenta.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" class="tabla-vacia">Agregá productos a la venta</td></tr>'
-    wrapper.innerHTML = ''
+        wrapper.innerHTML = ''
+    document.getElementById('venta-subtotal').textContent = '$0'
     document.getElementById('venta-total').textContent = '$0'
+    document.getElementById('resumen-tipo-precio').textContent = ''
     return
   }
 
@@ -845,6 +847,7 @@ function calcularVuelto() {
 
   document.getElementById('venta-subtotal').textContent = '$' + subtotal.toLocaleString('es-AR')
   document.getElementById('venta-total').textContent = '$' + total.toLocaleString('es-AR')
+  actualizarPreviewMixto(total)
 
   const efectivo = parseFloat(document.getElementById('venta-efectivo').value) || 0
   const vueltoBox = document.getElementById('vuelto-box')
@@ -893,6 +896,16 @@ const metodo = document.getElementById('venta-metodo').value
 
   const cliente = document.getElementById('venta-cliente').value.trim() || null
 
+  let pagoMixto = {}
+  if (metodo === 'efectivo/transferencia') {
+    const efectivoMixto = parseFloat(document.getElementById('venta-mixto-efectivo').value)
+    if (isNaN(efectivoMixto) || efectivoMixto <= 0 || efectivoMixto >= total) {
+      mostrarToast('Ingresá cuánto paga en efectivo (menos que el total)', 'error')
+      return
+    }
+    pagoMixto = { monto_efectivo: efectivoMixto, monto_transferencia: Math.round((total - efectivoMixto) * 100) / 100 }
+  }
+
   const fechaInput = document.getElementById('venta-fecha').value
 const fechaVenta = fechaInput ? new Date(fechaInput).toISOString() : new Date().toISOString()
 
@@ -918,7 +931,8 @@ const fechaVenta = fechaInput ? new Date(fechaInput).toISOString() : new Date().
     cliente,
     fecha: fechaVenta,
     numero_ticket: proximoTicket,
-    descuento: descuentoAplicado
+    descuento: descuentoAplicado,
+    ...pagoMixto
   }).select().single()
 
   if (error) {
@@ -965,6 +979,7 @@ const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000)
   .toISOString().slice(0, 16)
 document.getElementById('venta-fecha').value = fechaLocal
 
+  limpiarVenta()
   mostrarToast('Venta registrada!')
   mostrarTicket(venta, itemsParaTicket)
 })
@@ -972,10 +987,7 @@ document.getElementById('venta-fecha').value = fechaLocal
 // CANCELAR VENTA
 document.getElementById('btn-cancelar-venta').addEventListener('click', () => {
   if (itemsVenta.length > 0 && !confirm('¿Cancelar la venta actual?')) return
-  itemsVenta = []
-  renderizarItemsVenta()
-  document.getElementById('venta-efectivo').value = ''
-  document.getElementById('vuelto-box').style.display = 'none'
+  limpiarVenta()
 })
 
 // ── HISTORIAL ──
@@ -1029,11 +1041,14 @@ const { data: itemsVentas } = await db
   .select('*, productos(costo)')
   .in('venta_id', ventaIds)
 
-let gananciaTotal = 0
+const costoPorVenta = {}
 ;(itemsVentas || []).forEach(i => {
-  const costo = i.productos?.costo || 0
-  gananciaTotal += (i.precio_unitario - costo) * i.cantidad
+  const costo = Number(i.costo_unitario ?? i.productos?.costo ?? 0)
+  costoPorVenta[i.venta_id] = (costoPorVenta[i.venta_id] || 0) + costo * i.cantidad
 })
+const gananciaPorVenta = {}
+ventas.forEach(v => { gananciaPorVenta[v.id] = Number(v.total) - (costoPorVenta[v.id] || 0) })
+const gananciaTotal = Object.values(gananciaPorVenta).reduce((a, g) => a + g, 0)
 
 document.getElementById('filtros-ganancia').textContent = '$' + Math.round(gananciaTotal).toLocaleString('es-AR')
 resumen.style.display = 'flex'
@@ -1050,6 +1065,7 @@ resumen.style.display = 'flex'
         <td onclick="toggleDetalle('${v.id}')">${v.cliente || '<span style="color:var(--texto-suave)">-</span>'}</td>
         <td onclick="toggleDetalle('${v.id}')"><span class="badge-metodo">${v.metodo_pago}</span></td>
         <td onclick="toggleDetalle('${v.id}')">$${Number(v.total).toLocaleString('es-AR')}</td>
+        <td onclick="toggleDetalle('${v.id}')" class="info-sensible" style="filter:${infoDesbloqueada ? 'none' : 'blur(4px)'}; user-select:${infoDesbloqueada ? 'auto' : 'none'}; font-weight:600; color:${(gananciaPorVenta[v.id] || 0) >= 0 ? 'var(--verde)' : '#dc2626'}">$${Math.round(gananciaPorVenta[v.id] || 0).toLocaleString('es-AR')}</td>
         <td style="display:flex; gap:6px">
   <button class="btn-gris" style="padding:6px 10px" onclick="verTicketHistorial('${v.id}')"><i data-lucide="receipt" style="width:14px;height:14px"></i></button>
   <button class="btn-editar" style="padding:6px 10px" onclick="editarVenta('${v.id}', '${v.cliente || ''}', '${v.metodo_pago}', '${v.fecha}')"><i data-lucide="pencil" style="width:14px;height:14px"></i></button>
@@ -1057,7 +1073,7 @@ resumen.style.display = 'flex'
 </td>
       </tr>
       <tr class="fila-detalle" id="detalle-${v.id}" style="display:none">
-        <td colspan="7">
+        <td colspan="8">
           <div class="detalle-contenido" id="detalle-contenido-${v.id}">
             Cargando...
           </div>
@@ -1247,7 +1263,7 @@ async function renderizarCaja(inicio, fin) {
     .from('ventas')
     .select('*')
     .eq('negocio_id', negocioActual.id)
-    .eq('metodo_pago', 'efectivo')
+    .in('metodo_pago', ['efectivo', 'efectivo/transferencia'])
     .gte('fecha', inicio)
     .lte('fecha', fin)
 
@@ -1259,7 +1275,7 @@ async function renderizarCaja(inicio, fin) {
     .gte('fecha', inicio)
     .lte('fecha', fin)
 
-  const totalVentas = (ventasHoy || []).reduce((acc, v) => acc + Number(v.total), 0)
+  const totalVentas = (ventasHoy || []).reduce((acc, v) => acc + montoEfectivoVenta(v), 0)
   const totalEgresos = (egresosHoy || []).reduce((acc, e) => acc + Number(e.monto), 0)
   const saldo = Number(cajaAperturaActual.monto) + totalVentas - totalEgresos
 
@@ -1284,9 +1300,9 @@ async function renderizarCaja(inicio, fin) {
   movimientos.push({
     hora: new Date(v.fecha),
     tipo: 'Venta',
-    descripcion: 'Venta en efectivo',
+        descripcion: v.metodo_pago === 'efectivo' ? 'Venta en efectivo' : 'Venta mixta (parte en efectivo)',
     categoria: null,
-    monto: Number(v.total),
+    monto: montoEfectivoVenta(v),
     positivo: true
   })
 })
@@ -3689,14 +3705,22 @@ document.getElementById('btn-confirmar-eliminar-producto').addEventListener('cli
 function limpiarVenta() {
   itemsVenta = []
   renderizarItemsVenta()
+  document.getElementById('venta-buscar').value = ''
+  document.getElementById('venta-resultados').innerHTML = ''
   document.getElementById('venta-efectivo').value = ''
   document.getElementById('vuelto-box').style.display = 'none'
   document.getElementById('venta-cliente').value = ''
   document.getElementById('descuento-valor').value = ''
+  document.getElementById('descuento-tipo').value = 'porcentaje'
+  document.getElementById('venta-metodo').value = 'efectivo'
+  document.getElementById('campo-efectivo').style.display = 'flex'
+  document.getElementById('campo-mixto').style.display = 'none'
+  document.getElementById('venta-mixto-efectivo').value = ''
+  document.getElementById('venta-subtotal').textContent = '$0'
+  document.getElementById('venta-total').textContent = '$0'
   document.getElementById('resumen-tipo-precio').textContent = ''
   const ahora = new Date()
-  const fechaLocal = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-  document.getElementById('venta-fecha').value = fechaLocal
+  document.getElementById('venta-fecha').value = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 }
 
 // ── EDITAR VENTA ──
@@ -3707,6 +3731,13 @@ function editarVenta(id, cliente, metodo, fecha) {
   ventaEditando = id
   document.getElementById('editar-venta-cliente').value = cliente
   document.getElementById('editar-venta-metodo').value = metodo
+  document.getElementById('editar-campo-mixto').style.display = metodo === 'efectivo/transferencia' ? 'flex' : 'none'
+  document.getElementById('editar-venta-mixto-efectivo').value = ''
+  if (metodo === 'efectivo/transferencia') {
+    db.from('ventas').select('monto_efectivo').eq('id', id).single().then(({ data }) => {
+      document.getElementById('editar-venta-mixto-efectivo').value = data?.monto_efectivo ?? ''
+    })
+  }
   const fechaObj = new Date(fecha)
   const fechaLocal = new Date(fechaObj.getTime() - fechaObj.getTimezoneOffset() * 60000)
     .toISOString().slice(0, 16)
@@ -3841,8 +3872,18 @@ document.getElementById('btn-guardar-editar-venta').addEventListener('click', as
   const fecha = fechaInput ? new Date(fechaInput).toISOString() : null
   const nuevoTotal = itemsEditando.reduce((acc, i) => acc + i.precio_unitario * i.cantidad, 0)
 
+  let pagoEditado = { monto_efectivo: null, monto_transferencia: null }
+  if (metodo === 'efectivo/transferencia') {
+    const ef = parseFloat(document.getElementById('editar-venta-mixto-efectivo').value)
+    if (isNaN(ef) || ef <= 0 || ef >= nuevoTotal) {
+      mostrarToast('Ingresá cuánto se pagó en efectivo (menos que el total)', 'error')
+      return
+    }
+    pagoEditado = { monto_efectivo: ef, monto_transferencia: Math.round((nuevoTotal - ef) * 100) / 100 }
+  }
+
   const { error } = await db.from('ventas').update({
-    cliente, metodo_pago: metodo, fecha, total: nuevoTotal
+    cliente, metodo_pago: metodo, fecha, total: nuevoTotal, ...pagoEditado
   }).eq('id', ventaEditando)
 
   if (error) { mostrarToast('Error al guardar', 'error'); return }
@@ -3992,39 +4033,40 @@ document.getElementById('btn-aplicar-precio-personalizado').addEventListener('cl
 let itemsCompra = []
 
 async function cargarCompras() {
-  const { data, error } = await db
+  const { data } = await db
     .from('compras')
     .select('*')
     .eq('negocio_id', negocioActual.id)
     .order('fecha', { ascending: false })
 
-  const tbody = document.getElementById('tabla-compras')
+  const todas = data || []
+  const ahora = new Date()
+  const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
+  const delMes = todas.filter(c => new Date(c.fecha) >= inicioMes)
 
-  if (error || !data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="tabla-vacia">No hay compras registradas</td></tr>'
-    return
-  }
+  const total = delMes.reduce((a, c) => a + Number(c.total), 0)
+  const envios = delMes.reduce((a, c) => a + Number(c.costo_envio || 0), 0)
 
-  tbody.innerHTML = data.map(c => {
-    const fecha = new Date(c.fecha)
-    const fechaTexto = fecha.toLocaleDateString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires'}) + ' - ' + fecha.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires'})
-    return `
-      <tr class="fila-venta">
-        <td onclick="toggleDetalleCompra('${c.id}')"><button class="btn-expandir" id="flecha-compra-${c.id}"><i data-lucide="chevron-right"></i></button></td>
-        <td onclick="toggleDetalleCompra('${c.id}')">${fechaTexto}</td>
-        <td onclick="toggleDetalleCompra('${c.id}')">${c.proveedor || '-'}</td>
-        <td onclick="toggleDetalleCompra('${c.id}')"><span class="badge-metodo">${c.metodo_pago}</span></td>
-        <td onclick="toggleDetalleCompra('${c.id}')">${c.costo_envio > 0 ? '$' + Number(c.costo_envio).toLocaleString('es-AR') : '-'}</td>
-        <td onclick="toggleDetalleCompra('${c.id}')" style="font-weight:bold; color:var(--verde)">$${Number(c.total).toLocaleString('es-AR')}</td>
-        <td><button class="btn-rojo" style="padding:6px 10px" onclick="eliminarCompra('${c.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></td>
-      </tr>
-      <tr class="fila-detalle" id="detalle-compra-${c.id}" style="display:none">
-        <td colspan="7">
-          <div class="detalle-contenido" id="detalle-compra-contenido-${c.id}">Cargando...</div>
-        </td>
-      </tr>
-    `
-  }).join('')
+  const porProv = {}
+  delMes.forEach(c => {
+    const k = (c.proveedor || 'Sin proveedor').trim()
+    porProv[k] = (porProv[k] || 0) + Number(c.total)
+  })
+  const top = Object.entries(porProv).sort((a, b) => b[1] - a[1])[0]
+
+  document.getElementById('compras-card-total').textContent = '$' + Math.round(total).toLocaleString('es-AR')
+  document.getElementById('compras-card-cantidad').textContent = delMes.length
+  document.getElementById('compras-card-envios').textContent = '$' + Math.round(envios).toLocaleString('es-AR')
+  document.getElementById('compras-card-proveedor').textContent = top ? top[0] : '-'
+
+  const ultima = todas[0]
+  document.getElementById('compras-ultima').textContent = ultima
+    ? `Última compra: ${new Date(ultima.fecha).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}${ultima.proveedor ? ' · ' + ultima.proveedor : ''}`
+    : 'Todavía no registraste compras.'
+
+  // si el historial está abierto, lo refresca también
+  const tabHist = document.getElementById('tab-content-historial-compras')
+  if (tabHist && tabHist.style.display !== 'none') cargarHistorialCompras()
 
   lucide.createIcons()
 }
@@ -4534,7 +4576,7 @@ async function cargarAnalisisReportes(desde, hasta) {
   try {
     datos = await Promise.all([
       repTraerTodo(() => db.from('productos').select('*').eq('negocio_id', nid).order('id')),
-      repTraerTodo(() => db.from('ventas').select('id, fecha, total, descuento, cliente, metodo_pago').eq('negocio_id', nid).order('fecha').order('id')),
+      repTraerTodo(() => db.from('ventas').select('id, fecha, total, descuento, cliente, metodo_pago, monto_efectivo, monto_transferencia').eq('negocio_id', nid).order('fecha').order('id')),
       repTraerTodo(() => db.from('venta_items').select('cantidad, precio_unitario, costo_unitario, producto_id, nombre_producto, ventas!inner(fecha, negocio_id)').eq('ventas.negocio_id', nid).gte('ventas.fecha', tIni.toISOString()).lte('ventas.fecha', tFin.toISOString()).order('id')),
       repTraerTodo(() => db.from('venta_items').select('cantidad, producto_id, ventas!inner(fecha, negocio_id)').eq('ventas.negocio_id', nid).gte('ventas.fecha', hace90).order('id')),
       repTraerTodo(() => db.from('caja').select('monto, categoria, fecha').eq('negocio_id', nid).eq('tipo', 'egreso').gte('fecha', inicioEgresos).order('id')),
@@ -4684,6 +4726,7 @@ async function cargarAnalisisReportes(desde, hasta) {
       )}${rNota('Se calcula con lo que vendiste en los últimos 30 días. "Reponer" es lo que falta para cubrir 30 días más de ventas.')}`
 
   repCache = { productos, ultimaVenta }
+  repRenderEquilibrio({ totalVentas, costoMerc, itemsPeriodo, itemsRecientes, ventasTodas })
   repRenderStockMuerto()
 
   // ───────── COMPRAS ─────────
@@ -4762,7 +4805,14 @@ async function cargarAnalisisReportes(desde, hasta) {
 
   const comPct = { efectivo: 0, debito: Number(negocioActual.comision_debito || 0), credito: Number(negocioActual.comision_credito || 0), transferencia: Number(negocioActual.comision_transferencia || 0) }
   const porMetodo = {}
-  ventasPeriodo.forEach(v => { porMetodo[v.metodo_pago] = (porMetodo[v.metodo_pago] || 0) + Number(v.total) })
+    ventasPeriodo.forEach(v => {
+    if (v.metodo_pago === 'efectivo/transferencia') {
+      porMetodo.efectivo = (porMetodo.efectivo || 0) + Number(v.monto_efectivo || 0)
+      porMetodo.transferencia = (porMetodo.transferencia || 0) + Number(v.monto_transferencia || 0)
+    } else {
+      porMetodo[v.metodo_pago] = (porMetodo[v.metodo_pago] || 0) + Number(v.total)
+    }
+  })
   const filasCom = Object.entries(porMetodo).map(([m, monto]) => ({ m, monto, p: comPct[m] || 0, costo: (monto * (comPct[m] || 0)) / 100 }))
   const totalCom = rSuma(filasCom, f => f.costo)
   document.getElementById('rep-comisiones').innerHTML = filasCom.length === 0 ? rVacio('Sin ventas en el período.') : `
@@ -4821,6 +4871,129 @@ async function cargarAnalisisReportes(desde, hasta) {
         [{ t: 'Cliente' }, { t: 'Compras', n: 1 }, { t: 'Total gastado', n: 1 }, { t: 'Última compra', n: 1 }, { t: 'Días sin comprar', n: 1 }],
         inactivos.map(c => [c.nombre, c.compras, rMoneda(c.total), rFecha(c.ultima), `<strong>${c.dias}</strong>`])
       )}${rNota(`Clientes sin comprar hace más de ${REP_DIAS_INACTIVO} días, ordenados por lo que te dejaron. Lista lista para escribirles o ofrecerles algo.`)}`
+}
+
+// ── PAGO DIVIDIDO (EFECTIVO + TRANSFERENCIA) ──
+function montoEfectivoVenta(v) {
+  if (v.metodo_pago === 'efectivo') return Number(v.total)
+  if (v.metodo_pago === 'efectivo/transferencia') return Number(v.monto_efectivo || 0)
+  return 0
+}
+
+function actualizarPreviewMixto(total) {
+  const ef = parseFloat(document.getElementById('venta-mixto-efectivo').value) || 0
+  document.getElementById('venta-mixto-transferencia').textContent = '$' + Math.round(Math.max(0, total - ef)).toLocaleString('es-AR')
+}
+
+// la opción nueva se agrega acá para no tocar los 3 selects del HTML
+;['venta-metodo', 'filtro-metodo', 'editar-venta-metodo'].forEach(id => {
+  document.getElementById(id).appendChild(new Option('Efectivo + Transferencia', 'efectivo/transferencia'))
+})
+
+document.getElementById('venta-metodo').addEventListener('change', e => {
+  document.getElementById('campo-mixto').style.display = e.target.value === 'efectivo/transferencia' ? 'flex' : 'none'
+})
+document.getElementById('venta-mixto-efectivo').addEventListener('input', () => calcularVuelto())
+
+document.getElementById('editar-venta-metodo').closest('.campo').insertAdjacentHTML('afterend', `
+  <div class="campo" id="editar-campo-mixto" style="display:none">
+    <label>Monto en efectivo (el resto va por transferencia)</label>
+    <input type="number" id="editar-venta-mixto-efectivo" min="0" />
+  </div>
+`)
+document.getElementById('editar-venta-metodo').addEventListener('change', e => {
+  document.getElementById('editar-campo-mixto').style.display = e.target.value === 'efectivo/transferencia' ? 'flex' : 'none'
+})
+
+// ── PUNTO DE EQUILIBRIO ──
+const EQ_CAMPOS = [
+  ['alquiler', 'eq-alquiler'], ['personal', 'eq-personal'], ['servicios', 'eq-servicios'],
+  ['publicidad', 'eq-publicidad'], ['otros', 'eq-otros'],
+  ['variables_pct', 'eq-variables'], ['objetivo', 'eq-objetivo']
+]
+
+function cargarEquilibrioAjustes() {
+  const cfg = negocioActual.equilibrio_config || {}
+  EQ_CAMPOS.forEach(([k, id]) => { document.getElementById(id).value = cfg[k] || '' })
+}
+document.getElementById('btn-abrir-ajustes').addEventListener('click', cargarEquilibrioAjustes)
+
+document.getElementById('btn-guardar-equilibrio').addEventListener('click', async () => {
+  const cfg = {}
+  EQ_CAMPOS.forEach(([k, id]) => { cfg[k] = parseFloat(document.getElementById(id).value) || 0 })
+  const msg = document.getElementById('ajustes-mensaje-equilibrio')
+
+  const { error } = await db.from('negocios').update({ equilibrio_config: cfg }).eq('id', negocioActual.id)
+  if (error) {
+    msg.style.color = '#dc2626'
+    msg.textContent = 'Error al guardar'
+    return
+  }
+  negocioActual.equilibrio_config = cfg
+  msg.style.color = 'var(--verde)'
+  msg.textContent = 'Guardado!'
+})
+
+function repRenderEquilibrio({ totalVentas, costoMerc, itemsPeriodo, itemsRecientes, ventasTodas }) {
+  const el = document.getElementById('rep-equilibrio-nuevo')
+  const cfg = negocioActual.equilibrio_config || {}
+  const fijos = (cfg.alquiler || 0) + (cfg.personal || 0) + (cfg.servicios || 0) + (cfg.publicidad || 0) + (cfg.otros || 0)
+
+  if (fijos <= 0) {
+    el.innerHTML = rVacio('Cargá tus costos fijos mensuales en Ajustes → Punto de equilibrio y acá vas a ver cuánto tenés que vender, en pesos y en unidades.')
+    return
+  }
+
+  // reemplaza el cálculo simple de arriba
+  document.querySelector('#rep-neta .rep-equilibrio')?.remove()
+
+  const unidades = rSuma(itemsPeriodo, i => i.cantidad)
+  if (totalVentas <= 0 || unidades <= 0) { el.innerHTML = rVacio('No hay ventas en el período para calcular tu margen.'); return }
+
+  const varPct = (cfg.variables_pct || 0) / 100
+  const margen = (totalVentas - costoMerc - totalVentas * varPct) / totalVentas
+  if (margen <= 0) { el.innerHTML = rVacio('Con tus costos e impuestos actuales cada venta no deja margen. Revisá costos y precios.'); return }
+
+  const precioProm = totalVentas / unidades
+  const contribUnidad = precioProm * margen
+  const objetivo = cfg.objetivo || 0
+  const diasMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+
+  const eqPesos = fijos / margen
+  const eqUnid = Math.ceil(fijos / contribUnidad)
+  const metaPesos = (fijos + objetivo) / margen
+  const metaUnid = Math.ceil((fijos + objetivo) / contribUnidad)
+
+  const mesActual = rMes(new Date())
+  const vendidoMes = rSuma(ventasTodas.filter(v => rMes(v.fecha) === mesActual), v => Number(v.total))
+  const unidMes = rSuma(itemsRecientes.filter(i => rMes(i.ventas.fecha) === mesActual), i => i.cantidad)
+  const avP = Math.min((vendidoMes / eqPesos) * 100, 100)
+  const avU = Math.min((unidMes / eqUnid) * 100, 100)
+  const color = vendidoMes >= eqPesos ? 'var(--verde)' : '#f59e0b'
+
+  el.innerHTML = `
+    <div class="rep-kpis">
+      ${rKpi('Costos fijos por mes', rMoneda(fijos))}
+      ${rKpi('Margen de contribución', rPct(margen * 100))}
+      ${rKpi('Precio promedio por unidad', rMoneda(precioProm))}
+      ${rKpi('Te queda por unidad', rMoneda(contribUnidad), 'var(--verde)')}
+    </div>
+    ${rTabla(
+      [{ t: 'Objetivo' }, { t: 'En pesos', n: 1 }, { t: 'En unidades', n: 1 }, { t: 'Por día', n: 1 }],
+      [
+        ['<strong>Punto de equilibrio</strong>', `<strong>${rMoneda(eqPesos)}</strong>`, `<strong>${eqUnid}</strong>`, `${Math.ceil(eqUnid / diasMes)} unid. / ${rMoneda(eqPesos / diasMes)}`],
+        ...(objetivo > 0 ? [[`Para ganar ${rMoneda(objetivo)}`, rMoneda(metaPesos), metaUnid, `${Math.ceil(metaUnid / diasMes)} unid. / ${rMoneda(metaPesos / diasMes)}`]] : [])
+      ]
+    )}
+    <div class="rep-equilibrio" style="margin-top:14px">
+      <strong>Tu avance este mes</strong>
+      <div class="rep-progreso"><div style="width:${avP}%; background:${color}"></div></div>
+      <span style="font-size:13px">${vendidoMes >= eqPesos ? `Ya pasaste el equilibrio por ${rMoneda(vendidoMes - eqPesos)}` : `Vendiste ${rMoneda(vendidoMes)} de ${rMoneda(eqPesos)}. Te faltan ${rMoneda(eqPesos - vendidoMes)}`}</span>
+      <div class="rep-progreso"><div style="width:${avU}%; background:${color}"></div></div>
+      <span style="font-size:13px">${unidMes >= eqUnid ? `Vendiste ${unidMes} unidades, ya cubriste las ${eqUnid}` : `Vendiste ${unidMes} unidades. Te faltan ${eqUnid - unidMes}`}</span>
+    </div>
+    ${rNota('El margen y el precio promedio salen de las ventas del período que elegiste (ya con tus costos reales). Para que sea más preciso, generá el reporte de "Este mes" o de los últimos 2-3 meses. El avance siempre se mide con el mes calendario actual.')}
+  `
 }
 
 lucide.createIcons()
