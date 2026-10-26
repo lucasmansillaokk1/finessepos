@@ -1678,22 +1678,25 @@ function cargarCuotasAjustes() {
 function renderizarCuotasAjustes(cuotas) {
   const lista = document.getElementById('cuotas-lista')
   lista.innerHTML = cuotas.map((c, i) => `
-    <div style="display:grid; grid-template-columns:1fr 90px 38px; gap:8px; align-items:center; width:100%">
-      <input type="text" value="${c.label}" placeholder="Ej: 3 cuotas" 
-        style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px"
-        onchange="actualizarCuota(${i}, 'label', this.value)" />
-      <div style="display:flex; align-items:center; gap:4px">
-        <input type="number" value="${c.porcentaje}" placeholder="%" min="0"
-  style="padding:8px 12px; border-radius:8px; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font-size:13px; width:80px; min-width:80px"
-          onchange="actualizarCuota(${i}, 'porcentaje', this.value)" />
-        <span style="font-size:13px; color:var(--texto-suave)">%</span>
+    <div class="cuota-fila">
+      <input type="text" class="cuota-label" value="${String(c.label || '').replace(/"/g, '&quot;')}" placeholder="Ej: 3 cuotas" />
+      <div class="cuota-pct">
+        <input type="number" class="cuota-porcentaje" value="${c.porcentaje}" placeholder="0" min="0" step="0.01" />
+        <span>%</span>
       </div>
-      <button onclick="eliminarCuota(${i})" style="background:#fee2e2; border:none; border-radius:8px; padding:8px 10px; cursor:pointer; color:#dc2626; flex-shrink:0">
-  <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-</button>
+      <button type="button" class="cuota-borrar" onclick="eliminarCuota(${i})">
+        <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+      </button>
     </div>
   `).join('')
   lucide.createIcons()
+}
+
+function leerCuotasDelDOM() {
+  return Array.from(document.querySelectorAll('#cuotas-lista .cuota-fila')).map(fila => ({
+    label: fila.querySelector('.cuota-label').value,
+    porcentaje: parseFloat(fila.querySelector('.cuota-porcentaje').value) || 0
+  }))
 }
 
 let cuotasTemp = []
@@ -1704,15 +1707,15 @@ function actualizarCuota(i, campo, valor) {
 }
 
 function eliminarCuota(i) {
-  cuotasTemp = negocioActual.cuotas_config?.length ? [...negocioActual.cuotas_config] : []
-  cuotasTemp.splice(i, 1)
-  renderizarCuotasAjustes(cuotasTemp)
+  const actuales = leerCuotasDelDOM()
+  actuales.splice(i, 1)
+  renderizarCuotasAjustes(actuales)
 }
 
 document.getElementById('btn-agregar-cuota').addEventListener('click', () => {
-  if (!cuotasTemp.length) cuotasTemp = negocioActual.cuotas_config ? [...negocioActual.cuotas_config] : []
-  cuotasTemp.push({ cuotas: 0, porcentaje: 0, label: 'Nueva cuota' })
-  renderizarCuotasAjustes(cuotasTemp)
+  const actuales = leerCuotasDelDOM()
+  actuales.push({ label: 'Nueva cuota', porcentaje: 0 })
+  renderizarCuotasAjustes(actuales)
 })
 
 document.getElementById('btn-guardar-cuotas').addEventListener('click', async () => {
@@ -2361,23 +2364,24 @@ const rubro = rubros[negocioActual.rubro] || negocioActual.rubro || ''
 
       <hr class="ticket-separador">
 
+            ${venta.descuento > 0 ? `
+      <div class="ticket-info-fila">
+        <span>Subtotal</span>
+        <span>$${Number((venta.total || 0) + (venta.descuento || 0)).toLocaleString('es-AR')}</span>
+      </div>
+      <div class="ticket-info-fila" style="color:#dc2626">
+        <span>Descuento</span>
+        <span>-$${Number(venta.descuento).toLocaleString('es-AR')}</span>
+      </div>
+      ` : ''}
+      <div class="ticket-metodo">Pago: ${venta.metodo_pago.toUpperCase()}</div>
+
+      <hr class="ticket-separador">
+
       <div class="ticket-total-fila">
         <span>TOTAL:</span>
         <span>$${Number(venta.total).toLocaleString('es-AR')}</span>
       </div>
-
-      ${venta.descuento > 0 ? `
-<hr class="ticket-separador">
-<div class="ticket-info-fila">
-  <span>Subtotal</span>
-  <span>$${Number((venta.total || 0) + (venta.descuento || 0)).toLocaleString('es-AR')}</span>
-</div>
-<div class="ticket-info-fila" style="color:#dc2626">
-  <span>Descuento</span>
-  <span>-$${Number(venta.descuento).toLocaleString('es-AR')}</span>
-</div>
-` : ''}
-<div class="ticket-metodo">Pago: ${venta.metodo_pago.toUpperCase()}</div>
 
       <hr class="ticket-separador">
 
