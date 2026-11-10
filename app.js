@@ -239,6 +239,7 @@ if (seccion === 'reportes') {
 
 // ── MOSTRAR APP ──
 function mostrarApp() {
+  verificarAperturaCaja()
   document.getElementById('pantalla-login').style.display = 'none'
   document.getElementById('pantalla-app').style.display = 'block'
   document.getElementById('nav-email').textContent = negocioActual.nombre
@@ -992,6 +993,8 @@ document.getElementById('btn-cancelar-venta').addEventListener('click', () => {
 
 // ── HISTORIAL ──
 async function cargarHistorial(filtros = {}) {
+  const tfHist = document.getElementById('historial-tfoot')
+  if (tfHist) tfHist.style.display = 'none'
   let query = db
     .from('ventas')
     .select('*')
@@ -1051,6 +1054,7 @@ ventas.forEach(v => { gananciaPorVenta[v.id] = Number(v.total) - (costoPorVenta[
 const gananciaTotal = Object.values(gananciaPorVenta).reduce((a, g) => a + g, 0)
 
 document.getElementById('filtros-ganancia').textContent = '$' + Math.round(gananciaTotal).toLocaleString('es-AR')
+actualizarTotalHistorial(ventas.length, totalFiltrado, gananciaTotal)
 resumen.style.display = 'flex'
 
   tbody.innerHTML = ventas.map(v => {
@@ -1106,6 +1110,33 @@ document.getElementById('btn-limpiar-filtros').addEventListener('click', () => {
   document.getElementById('filtros-resumen').style.display = 'none'
   cargarHistorial()
 })
+
+// ── TOTAL DEL PERÍODO EN EL HISTORIAL ──
+;(function prepararTotalHistorial() {
+  document.getElementById('tabla-historial').closest('table').insertAdjacentHTML('beforeend', `
+    <tfoot id="historial-tfoot" style="display:none">
+      <tr style="background:var(--fondo)">
+        <td colspan="5" style="padding:14px 16px; font-weight:700; border-top:2px solid var(--borde)">Total del período (<span id="historial-tf-cant">0</span> ventas)</td>
+        <td id="historial-tf-total" style="padding:14px 16px; font-weight:700; border-top:2px solid var(--borde)">$0</td>
+        <td id="historial-tf-ganancia" class="info-sensible" style="padding:14px 16px; font-weight:700; border-top:2px solid var(--borde)">$0</td>
+        <td style="border-top:2px solid var(--borde)"></td>
+      </tr>
+    </tfoot>
+  `)
+})()
+
+function actualizarTotalHistorial(cant, total, ganancia) {
+  const tf = document.getElementById('historial-tfoot')
+  if (!tf) return
+  document.getElementById('historial-tf-cant').textContent = cant
+  document.getElementById('historial-tf-total').textContent = rMoneda(total)
+  const g = document.getElementById('historial-tf-ganancia')
+  g.textContent = (ganancia < 0 ? '-' : '') + rMoneda(Math.abs(ganancia))
+  g.style.color = ganancia >= 0 ? 'var(--verde)' : '#dc2626'
+  g.style.filter = infoDesbloqueada ? 'none' : 'blur(4px)'
+  g.style.userSelect = infoDesbloqueada ? 'auto' : 'none'
+  tf.style.display = ''
+}
 
 // BÚSQUEDA EN TIEMPO REAL
 document.getElementById('filtro-buscar').addEventListener('input', () => {
@@ -1426,6 +1457,8 @@ async function cargarDashboard() {
   document.querySelector('#seccion-dashboard .card:nth-child(2) .card-valor').textContent = '$' + totalMes.toLocaleString('es-AR')
   document.querySelector('#seccion-dashboard .card:nth-child(3) .card-valor').textContent = (cantidadProductos || 0).toString()
   document.querySelector('#seccion-dashboard .card:nth-child(4) .card-valor').textContent = '$' + Math.round(ticketPromedio).toLocaleString('es-AR')
+
+  cargarEquilibrioDashboard()
 
   // VENTAS ÚLTIMOS 7 DÍAS
   const { data: ventas7dias } = await db
@@ -4730,6 +4763,115 @@ async function cargarAnalisisReportes(desde, hasta) {
       )}${rNota('Se calcula con lo que vendiste en los últimos 30 días. "Reponer" es lo que falta para cubrir 30 días más de ventas.')}`
 
   repCache = { productos, ultimaVenta }
+  repRenderSimulador()
+  // ── SIMULADOR DE LIQUIDACIÓN ──
+let simDescuento = 30
+
+;(function prepararSimulador() {
+  const card = document.createElement('div')
+  card.className = 'grafico-card'
+  card.innerHTML = '<h3 class="grafico-titulo">Simulador de liquidación</h3><div id="rep-simulador"></div>'
+  document.getElementById('rep-pane-inventario').appendChild(card)
+  document.getElementById('rep-muerto-dias').addEventListener('change', () => repRenderSimulador())
+})()
+
+function repRenderSimulador() {
+  const el = document.getElementById('rep-simulador')
+  if (!el || !repCache) return
+  const dias = parseInt(document.getElementById('rep-muerto-dias').value)
+  const limite = Date.now() - dias * 86400000
+  const varPct = Math.min((Number((negocioActual.equilibrio_config || {}).variables_pct) || 0) / 100, 0.9)
+
+  const lista = repCache.productos
+    .filter(p => p.stock > 0 && !(repCache.ultimaVenta[p.id] >= limite))
+    .map(p => {
+      const costo = Number(p.costo) || 0
+      const precio = Number(p.precio) || 0
+      const piso = costo > 0 ? costo / (1 - varPct) : 0
+      return { p, costo, precio, piso, inmov: p.stock * costo, descMax: costo > 0 && precio > 0 ? Math.max(0, (1 - piso / precio) * 100) : null }
+    })
+    .sort((a, b) => b.inmov - a.inmov)
+
+  if (lista.length === 0) {
+    el.innerHTML = rVacio('No hay stock parado con ese filtro: no hay nada para liquidar.')
+    return
+  }
+
+  const conCosto = lista.filter(f => f.costo > 0 && f.precio > 0)
+  const sinCosto = lista.length - conCosto.length
+  const seguro = conCosto.length ? Math.floor(Math.min(...conCosto.map(f => f.descMax))) : 0
+
+  const calc = d => {
+    let caja = 0, perdidos = 0
+    conCosto.forEach(f => {
+      const neto = f.precio * (1 - d / 100) * (1 - varPct)
+      caja += f.p.stock * neto
+      if (neto < f.costo) perdidos++
+    })
+    const inmov = rSuma(conCosto, f => f.inmov)
+    return { caja, inmov, resultado: caja - inmov, perdidos }
+  }
+
+  el.innerHTML = `
+    <div class="campo">
+      <label>Descuento sobre el precio de lista: <strong id="sim-valor">${simDescuento}%</strong></label>
+      <input type="range" id="sim-slider" min="0" max="80" step="1" value="${simDescuento}" style="padding:0; border:none; background:none" />
+    </div>
+    <div id="sim-resultado"></div>
+  `
+
+  const pintar = () => {
+    const d = simDescuento
+    const r = calc(d)
+    const filas = lista.slice(0, 15).map(f => {
+      const liq = f.precio * (1 - d / 100)
+      const res = f.costo > 0 ? (liq * (1 - varPct) - f.costo) * f.p.stock : null
+      return [
+        f.p.nombre,
+        f.p.stock,
+        f.costo ? rMoneda(f.costo) : 'Sin costo',
+        f.precio ? rMoneda(f.precio) : '-',
+        `<strong>${rMoneda(liq)}</strong>`,
+        f.piso ? rMoneda(f.piso) : '-',
+        f.descMax === null ? '-' : rPct(f.descMax, 0),
+        res === null ? '-' : `<span style="font-weight:700; color:${res >= 0 ? 'var(--verde)' : '#dc2626'}">${res >= 0 ? 'Gana ' : 'Pierde '}${rMoneda(Math.abs(res))}</span>`
+      ]
+    })
+    const escenarios = [10, 20, 30, 40, 50].map(x => ({ x, ...calc(x) }))
+
+    document.getElementById('sim-resultado').innerHTML = `
+      <div class="rep-kpis">
+        ${rKpi('Plata parada (a costo)', rMoneda(r.inmov), '#dc2626')}
+        ${rKpi('Entra en caja si vendés todo', rMoneda(r.caja), 'var(--verde)')}
+        ${rKpi('Resultado vs costo', (r.resultado >= 0 ? '+' : '-') + rMoneda(Math.abs(r.resultado)), r.resultado >= 0 ? 'var(--verde)' : '#dc2626')}
+        ${rKpi('Productos que pierden', `${r.perdidos} de ${conCosto.length}`, r.perdidos ? '#dc2626' : 'var(--verde)')}
+      </div>
+      ${rNota(`Hasta un <strong>${seguro}%</strong> de descuento ningún producto pierde plata. El piso incluye tus impuestos y comisiones de Ajustes (${rPct(varPct * 100)}), no los costos fijos.${sinCosto > 0 ? ` ${sinCosto} producto(s) sin costo cargado no entran en los totales.` : ''}`)}
+      ${rTabla(
+        [{ t: 'Producto' }, { t: 'Stock', n: 1 }, { t: 'Costo', n: 1 }, { t: 'Lista', n: 1 }, { t: 'Con desc.', n: 1 }, { t: 'Piso', n: 1 }, { t: 'Desc. máx.', n: 1 }, { t: 'Resultado', n: 1 }],
+        filas
+      )}
+      <p style="font-weight:600; font-size:14px; margin:18px 0 8px">Comparación de descuentos (todo el stock parado)</p>
+      ${rTabla(
+        [{ t: 'Descuento' }, { t: 'Entra en caja', n: 1 }, { t: 'Resultado vs costo', n: 1 }, { t: 'Pierden', n: 1 }],
+        escenarios.map(e => [
+          `${e.x}%`,
+          rMoneda(e.caja),
+          `<span style="font-weight:700; color:${e.resultado >= 0 ? 'var(--verde)' : '#dc2626'}">${e.resultado >= 0 ? '+' : '-'}${rMoneda(Math.abs(e.resultado))}</span>`,
+          `${e.perdidos} de ${conCosto.length}`
+        ])
+      )}
+      ${rNota('Vender con resultado negativo no siempre es malo: esa plata ya la gastaste, y recuperarla te sirve para reponer lo que sí rota. Asume que vendés todo el stock parado; si vendés solo una parte, es proporcional.')}
+    `
+  }
+
+  document.getElementById('sim-slider').addEventListener('input', e => {
+    simDescuento = parseInt(e.target.value)
+    document.getElementById('sim-valor').textContent = simDescuento + '%'
+    pintar()
+  })
+  pintar()
+}
   repRenderEquilibrio({ totalVentas, costoMerc, itemsPeriodo, itemsRecientes, ventasTodas })
   repRenderStockMuerto()
 
@@ -4869,6 +5011,23 @@ async function cargarAnalisisReportes(desde, hasta) {
       [...listaClientes].sort((a, b) => b.total - a.total).slice(0, 15).map(c => [c.nombre, c.compras, rMoneda(c.total), rMoneda(c.total / c.compras), rFecha(c.ultima), `${c.dias} d`])
     )}${notaClientes}`
   const inactivos = listaClientes.filter(c => c.dias > REP_DIAS_INACTIVO).sort((a, b) => b.total - a.total).slice(0, 15)
+  window.repPDF = {
+    desde, hasta, totalVentas, costoMerc, totalGastos, totalEnvios, neta, sinCosto,
+    nVentas: ventasPeriodo.length,
+    unidades: rSuma(itemsPeriodo, i => i.cantidad),
+    totalDesc, valorCortesias, cortesiasUnid: rSuma(cortesias, i => i.cantidad),
+    claseA: paretoProd.filter(f => f.clase === 'A').length,
+    productos: paretoProd.slice(0, 7).map(f => ({ n: f.nombre, u: f.unidades, v: f.ventas, g: f.ganancia, m: f.margen, c: f.clase })),
+    repos: repos.slice(0, 3).map(f => ({ n: f.p.nombre, dif: f.dif })),
+    diasStock: filasDias.slice(0, 5).map(f => ({ n: f.p.nombre, s: f.p.stock, d: f.dias, r: f.reponer })),
+    proveedores: paretoProv.slice(0, 5).map(f => ({ n: f.nombre, m: f.monto, p: f.pctTotal, c: f.clase })),
+    gastos: filasCat.slice(0, 5),
+    comisiones: filasCom.map(f => ({ m: f.m, monto: f.monto, p: f.p, costo: f.costo })),
+    totalCom,
+    porDia: dias.map((d, i) => ({ d, v: porDia[i].ventas, t: porDia[i].total })),
+    clientes: [...listaClientes].sort((a, b) => b.total - a.total).slice(0, 5).map(c => ({ n: c.nombre, k: c.compras, t: c.total })),
+    inactivosTotal: listaClientes.filter(c => c.dias > REP_DIAS_INACTIVO).length
+  }
   document.getElementById('rep-clientes-inactivos').innerHTML = inactivos.length === 0
     ? rVacio(`Todos tus clientes compraron en los últimos ${REP_DIAS_INACTIVO} días.`)
     : `${rTabla(
@@ -4941,7 +5100,7 @@ document.getElementById('btn-guardar-equilibrio').addEventListener('click', asyn
 function repRenderEquilibrio({ totalVentas, costoMerc, itemsPeriodo, itemsRecientes, ventasTodas }) {
   const el = document.getElementById('rep-equilibrio-nuevo')
   const cfg = negocioActual.equilibrio_config || {}
-  const fijos = (cfg.alquiler || 0) + (cfg.personal || 0) + (cfg.servicios || 0) + (cfg.publicidad || 0) + (cfg.otros || 0)
+  const fijos = eqTotalFijos(cfg)
 
   if (fijos <= 0) {
     el.innerHTML = rVacio('Cargá tus costos fijos mensuales en Ajustes → Punto de equilibrio y acá vas a ver cuánto tenés que vender, en pesos y en unidades.')
@@ -4999,6 +5158,812 @@ function repRenderEquilibrio({ totalVentas, costoMerc, itemsPeriodo, itemsRecien
     ${rNota('El margen y el precio promedio salen de las ventas del período que elegiste (ya con tus costos reales). Para que sea más preciso, generá el reporte de "Este mes" o de los últimos 2-3 meses. El avance siempre se mide con el mes calendario actual.')}
   `
 }
+
+// ── DASHBOARD: RITMO HACIA EL EQUILIBRIO ──
+;(function prepararEquilibrioDashboard() {
+  document.querySelector('.comparativa-wrapper').insertAdjacentHTML('beforebegin', `
+    <div class="grafico-card" style="margin-top:20px">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:16px">
+        <h3 class="grafico-titulo" style="margin:0">Ritmo hacia el punto de equilibrio</h3>
+        <button type="button" class="btn-gris" title="Ver / ocultar" style="padding:6px 10px; display:flex; align-items:center" onclick="document.getElementById('btn-toggle-pin').click()">
+          <i data-lucide="lock" style="width:14px;height:14px"></i>
+        </button>
+      </div>
+      <div id="dash-equilibrio" class="info-sensible"><p class="rep-vacio">Calculando...</p></div>
+    </div>
+  `)
+})()
+
+async function cargarEquilibrioDashboard() {
+  const el = document.getElementById('dash-equilibrio')
+  if (!el || !negocioActual) return
+  const cfg = negocioActual.equilibrio_config || {}
+  const fijos = eqTotalFijos(cfg)
+  if (fijos <= 0) {
+    el.innerHTML = rVacio('Cargá tus costos fijos mensuales en Ajustes → Punto de equilibrio y acá vas a ver cómo venís este mes.')
+    return
+  }
+
+  try {
+    const nid = negocioActual.id
+    const hace90 = new Date(Date.now() - 90 * 86400000).toISOString()
+    const [ventas, items, productos] = await Promise.all([
+      repTraerTodo(() => db.from('ventas').select('total, fecha').eq('negocio_id', nid).gte('fecha', hace90).order('fecha').order('id')),
+      repTraerTodo(() => db.from('venta_items').select('cantidad, costo_unitario, producto_id, ventas!inner(fecha, negocio_id)').eq('ventas.negocio_id', nid).gte('ventas.fecha', hace90).order('id')),
+      repTraerTodo(() => db.from('productos').select('id, costo').eq('negocio_id', nid).order('id'))
+    ])
+
+    const prodCosto = {}
+    productos.forEach(p => { prodCosto[p.id] = Number(p.costo) || 0 })
+    const total90 = rSuma(ventas, v => Number(v.total))
+    const unid90 = rSuma(items, i => i.cantidad)
+    if (total90 <= 0 || unid90 <= 0) {
+      el.innerHTML = rVacio('Todavía no hay ventas suficientes para calcular tu margen.')
+      return
+    }
+    const costo90 = rSuma(items, i => (Number(i.costo_unitario ?? prodCosto[i.producto_id]) || 0) * i.cantidad)
+    const sinCosto = items.filter(i => i.costo_unitario == null && prodCosto[i.producto_id] === undefined).length
+    const varPct = Math.min((Number(cfg.variables_pct) || 0) / 100, 0.9)
+    const margen = (total90 - costo90 - total90 * varPct) / total90
+    if (margen <= 0) {
+      el.innerHTML = rVacio('Con tus costos e impuestos actuales cada venta no deja margen. Revisá costos y precios.')
+      return
+    }
+
+    const precioProm = total90 / unid90
+    const eq = fijos / margen
+    const eqUnid = Math.ceil(eq / precioProm)
+    const objetivo = Number(cfg.objetivo) || 0
+    const meta = (fijos + objetivo) / margen
+
+    const mesActual = rMes(new Date())
+    const vendido = rSuma(ventas.filter(v => rMes(v.fecha) === mesActual), v => Number(v.total))
+    const hoy = new Date()
+    const dia = hoy.getDate()
+    const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+    const diasQuedan = diasMes - dia + 1
+    const proyeccion = (vendido / dia) * diasMes
+    const falta = Math.max(0, eq - vendido)
+
+    let estado, colorEstado, kpisExtra
+    if (vendido >= eq) {
+      estado = `Ya cubriste tus costos del mes. Cada $100 que vendas de acá en adelante te dejan ${rMoneda(100 * margen)} de ganancia.`
+      colorEstado = 'var(--verde)'
+      kpisExtra = rKpi('Ganancia del mes (estimada)', rMoneda((vendido - eq) * margen), 'var(--verde)') +
+                  rKpi('Por encima del equilibrio', rMoneda(vendido - eq), 'var(--verde)')
+    } else {
+      if (dia < 5) {
+        estado = 'Todavía es pronto para proyectar el mes: esperá unos días de ventas.'
+        colorEstado = 'var(--texto-suave)'
+      } else if (proyeccion >= eq) {
+        estado = `A este ritmo cubrís el equilibrio: proyectás ${rMoneda(proyeccion)} para fin de mes.`
+        colorEstado = '#b45309'
+      } else {
+        estado = `A este ritmo no llegás: proyectás ${rMoneda(proyeccion)} y el equilibrio es ${rMoneda(eq)}. Hay que subir el ritmo diario.`
+        colorEstado = '#dc2626'
+      }
+      kpisExtra = rKpi('Te faltan', rMoneda(falta), '#b45309') +
+                  rKpi('Necesitás por día', rMoneda(falta / diasQuedan) + `<small class="rep-sub">${diasQuedan} días, hoy incluido</small>`)
+    }
+
+    const escala = Math.max(objetivo > 0 ? meta : eq * 1.5, vendido * 1.05)
+    const pLinea = (eq / escala) * 100
+    const pMeta = (meta / escala) * 100
+    const pBase = (Math.min(vendido, eq) / escala) * 100
+    const pGan = (Math.max(0, vendido - eq) / escala) * 100
+
+    el.innerHTML = `
+      <div class="rep-kpis">
+        ${rKpi('Punto de equilibrio', rMoneda(eq) + `<small class="rep-sub">≈ ${eqUnid} unidades</small>`)}
+        ${rKpi('Vendido este mes', rMoneda(vendido))}
+        ${kpisExtra}
+      </div>
+      <div class="eq-barra">
+        <div class="eq-barra-base" style="width:${pBase}%"></div>
+        <div class="eq-barra-ganancia" style="left:${pLinea}%; width:${pGan}%"></div>
+        <div class="eq-linea" style="left:${pLinea}%"><span>Equilibrio</span></div>
+        ${objetivo > 0 ? `<div class="eq-linea eq-linea-meta" style="left:${pMeta}%"><span>Meta</span></div>` : ''}
+      </div>
+      <div class="eq-leyenda">
+        <span><i style="background:#f59e0b"></i>Cubriendo costos</span>
+        <span><i style="background:var(--verde)"></i>Ganancia</span>
+      </div>
+      <p style="font-size:13px; font-weight:600; color:${colorEstado}">${estado}</p>
+      ${rNota(`El margen (${rPct(margen * 100)}) y el precio promedio salen de tus ventas de los últimos 90 días, así no se desacomoda a principio de mes. Los costos fijos son los que cargaste en Ajustes. Se actualiza cada vez que entrás al Dashboard.${sinCosto > 0 ? ` Ojo: ${sinCosto} items vendidos no tienen costo y cuentan como $0, lo que infla el margen.` : ''}`)}
+    `
+  } catch (e) {
+    console.error('Equilibrio dashboard:', e)
+    el.innerHTML = rVacio('No se pudo calcular el equilibrio.')
+  }
+}
+
+// ── APERTURA DE CAJA AL INICIAR SESIÓN ──
+;(function prepararAperturaCaja() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modal-apertura-caja" style="display:none">
+      <div class="modal" style="max-width:380px">
+        <div class="modal-header">
+          <h3 style="display:flex; align-items:center; gap:8px"><i data-lucide="wallet" style="width:18px;height:18px;color:var(--verde)"></i> Abrir caja del día</h3>
+        </div>
+        <div class="modal-body" style="gap:14px">
+          <p style="font-size:14px; color:var(--texto-suave)">Antes de empezar, ingresá el efectivo con el que arrancás hoy.</p>
+          <div class="campo">
+            <label>Efectivo en caja</label>
+            <input type="number" id="apertura-modal-monto" min="0" placeholder="Ej: 5000" />
+          </div>
+          <button type="button" id="apertura-modal-usar-ultimo" class="btn-gris" style="display:none; justify-content:center; font-size:13px"></button>
+          <p id="apertura-modal-error" style="color:#dc2626; font-size:13px; min-height:18px; text-align:center"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-verde" id="btn-apertura-modal-confirmar" style="justify-content:center">
+            <i data-lucide="check" style="width:15px;height:15px"></i> Abrir caja
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-pin-apertura" style="display:none">
+      <div class="modal" style="max-width:320px">
+        <div class="modal-header">
+          <h3 style="display:flex; align-items:center; gap:8px"><i data-lucide="lock" style="width:18px;height:18px;color:var(--verde)"></i> PIN de seguridad</h3>
+          <button class="btn-cerrar" id="btn-cerrar-pin-apertura"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body" style="text-align:center; gap:12px">
+          <p style="font-size:14px; color:var(--texto-suave)">Ingresá el PIN para desactivar la apertura de caja.</p>
+          <input type="password" id="pin-apertura-input" maxlength="4" inputmode="numeric" autocomplete="off" style="width:150px; height:52px; margin:0 auto; padding:0; text-align:center; font-size:22px; font-weight:bold; letter-spacing:8px; border-radius:10px; border:2px solid var(--borde); background:var(--fondo); color:var(--texto)" />
+          <p id="pin-apertura-error" style="color:#dc2626; font-size:13px; min-height:18px"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-gris" id="btn-cancelar-pin-apertura">Cancelar</button>
+          <button class="btn-verde" id="btn-confirmar-pin-apertura" style="justify-content:center">Desactivar</button>
+        </div>
+      </div>
+    </div>
+  `)
+
+  document.querySelector('.ajustes-grid').insertAdjacentHTML('beforeend', `
+    <div class="ajuste-card">
+      <h3 class="ajuste-card-titulo"><i data-lucide="wallet" style="width:18px;height:18px"></i> Apertura de caja</h3>
+      <p style="font-size:13px; color:var(--texto-suave)">Al iniciar sesión pide el efectivo con el que arrancás el día, para que no se pase por alto. Para desactivarlo se pide el PIN de seguridad.</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+        <span style="font-size:14px">Pedir monto al iniciar el día</span>
+        <label class="switch" style="flex-shrink:0">
+          <input type="checkbox" id="ajustes-pedir-apertura" checked />
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <p id="ajustes-mensaje-apertura" style="font-size:13px; text-align:center; min-height:18px"></p>
+    </div>
+  `)
+})()
+
+let verificandoApertura = false
+
+async function verificarAperturaCaja() {
+  if (verificandoApertura || !negocioActual || negocioActual.pedir_apertura_caja === false) return
+  try { if (sessionStorage.getItem('apertura-omitida') === negocioActual.id + '|' + new Date().toDateString()) return } catch (e) {}
+  const modal = document.getElementById('modal-apertura-caja')
+  if (modal.style.display === 'flex') return
+  verificandoApertura = true
+  try {
+    const { inicio, fin } = getInicioFinHoy()
+    const { data: hoy, error } = await db.from('caja').select('id')
+      .eq('negocio_id', negocioActual.id)
+      .in('tipo', ['apertura', 'cierre'])
+      .gte('fecha', inicio).lte('fecha', fin)
+      .limit(1)
+    if (error || (hoy && hoy.length > 0)) return
+
+    const { data: ult } = await db.from('caja').select('monto, efectivo_real, fecha')
+      .eq('negocio_id', negocioActual.id).eq('tipo', 'cierre')
+      .order('fecha', { ascending: false }).limit(1)
+
+    const btnUsar = document.getElementById('apertura-modal-usar-ultimo')
+    const ultimo = ult && ult[0]
+    if (ultimo) {
+      const m = Number(ultimo.efectivo_real ?? ultimo.monto) || 0
+      const f = new Date(ultimo.fecha).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })
+      btnUsar.textContent = `Usar el cierre del ${f}: ${rMoneda(m)}`
+      btnUsar.dataset.monto = m
+      btnUsar.style.display = 'flex'
+    } else {
+      btnUsar.style.display = 'none'
+    }
+
+    document.getElementById('apertura-modal-monto').value = ''
+    document.getElementById('apertura-modal-error').textContent = ''
+    modal.style.display = 'flex'
+    lucide.createIcons()
+    document.getElementById('apertura-modal-monto').focus()
+  } finally {
+    verificandoApertura = false
+  }
+}
+
+document.getElementById('apertura-modal-usar-ultimo').addEventListener('click', e => {
+  document.getElementById('apertura-modal-monto').value = e.currentTarget.dataset.monto
+})
+
+document.getElementById('apertura-modal-monto').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-apertura-modal-confirmar').click()
+})
+
+document.getElementById('btn-apertura-modal-confirmar').addEventListener('click', async () => {
+  const monto = parseFloat(document.getElementById('apertura-modal-monto').value)
+  const err = document.getElementById('apertura-modal-error')
+  if (isNaN(monto) || monto < 0) {
+    err.textContent = 'Ingresá un monto válido (puede ser 0)'
+    return
+  }
+  const btn = document.getElementById('btn-apertura-modal-confirmar')
+  btn.disabled = true
+  const { error } = await db.from('caja').insert({ negocio_id: negocioActual.id, tipo: 'apertura', monto })
+  btn.disabled = false
+  if (error) {
+    err.textContent = 'No se pudo abrir la caja. Intentá de nuevo.'
+    return
+  }
+  document.getElementById('modal-apertura-caja').style.display = 'none'
+  mostrarToast('Caja abierta con ' + rMoneda(monto))
+  cargarCaja()
+})
+
+// ── SWITCH EN AJUSTES (desactivar pide PIN) ──
+let intentosPinApertura = 0
+let bloqueoPinApertura = 0
+
+async function guardarPedirApertura(valor) {
+  const sw = document.getElementById('ajustes-pedir-apertura')
+  const msg = document.getElementById('ajustes-mensaje-apertura')
+  const { error } = await db.from('negocios').update({ pedir_apertura_caja: valor }).eq('id', negocioActual.id)
+  if (error) {
+    sw.checked = !valor
+    msg.style.color = '#dc2626'
+    msg.textContent = 'Error al guardar'
+    return
+  }
+  negocioActual.pedir_apertura_caja = valor
+  msg.style.color = 'var(--verde)'
+  msg.textContent = valor ? 'Activado: se va a pedir al iniciar el día' : 'Desactivado'
+}
+
+function pedirPinDesactivarApertura() {
+  if (Date.now() < bloqueoPinApertura) {
+    mostrarToast('PIN bloqueado por intentos fallidos. Esperá unos segundos.', 'error')
+    return
+  }
+  document.getElementById('pin-apertura-input').value = ''
+  document.getElementById('pin-apertura-error').textContent = ''
+  document.getElementById('modal-pin-apertura').style.display = 'flex'
+  lucide.createIcons()
+  document.getElementById('pin-apertura-input').focus()
+}
+
+function cerrarPinApertura() {
+  document.getElementById('modal-pin-apertura').style.display = 'none'
+}
+
+document.getElementById('ajustes-pedir-apertura').addEventListener('change', e => {
+  const activar = e.target.checked
+  if (!activar && negocioActual.pin_seguridad) {
+    e.target.checked = true
+    pedirPinDesactivarApertura()
+    return
+  }
+  guardarPedirApertura(activar)
+})
+
+document.getElementById('btn-confirmar-pin-apertura').addEventListener('click', () => {
+  const input = document.getElementById('pin-apertura-input')
+  const err = document.getElementById('pin-apertura-error')
+  if (input.value === negocioActual.pin_seguridad) {
+    intentosPinApertura = 0
+    cerrarPinApertura()
+    document.getElementById('ajustes-pedir-apertura').checked = false
+    guardarPedirApertura(false)
+    return
+  }
+  intentosPinApertura++
+  input.value = ''
+  if (intentosPinApertura >= MAX_INTENTOS_PIN) {
+    intentosPinApertura = 0
+    bloqueoPinApertura = Date.now() + 30000
+    cerrarPinApertura()
+    mostrarToast('PIN bloqueado por 3 intentos fallidos. Esperá 30 segundos.', 'error')
+    return
+  }
+  err.textContent = `PIN incorrecto. Te quedan ${MAX_INTENTOS_PIN - intentosPinApertura} intento${MAX_INTENTOS_PIN - intentosPinApertura === 1 ? '' : 's'}`
+  input.focus()
+})
+
+document.getElementById('pin-apertura-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-confirmar-pin-apertura').click()
+})
+document.getElementById('btn-cancelar-pin-apertura').addEventListener('click', cerrarPinApertura)
+document.getElementById('btn-cerrar-pin-apertura').addEventListener('click', cerrarPinApertura)
+
+// refleja el estado guardado cada vez que se abre Ajustes
+document.getElementById('btn-abrir-ajustes').addEventListener('click', () => {
+  const sw = document.getElementById('ajustes-pedir-apertura')
+  if (sw && negocioActual) sw.checked = negocioActual.pedir_apertura_caja !== false
+})
+
+// ═══════ 1) PUNTO DE EQUILIBRIO: GASTOS FIJOS EDITABLES ═══════
+function eqGastosFijos(cfg) {
+  cfg = cfg || {}
+  if (Array.isArray(cfg.gastos_fijos)) return cfg.gastos_fijos.map(g => ({ nombre: String(g.nombre || ''), monto: Number(g.monto) || 0 }))
+  const viejos = [['alquiler', 'Alquiler'], ['personal', 'Sueldos / personal'], ['servicios', 'Servicios'], ['publicidad', 'Publicidad'], ['otros', 'Otros']]
+  return viejos.map(([k, n]) => ({ nombre: n, monto: Number(cfg[k]) || 0 })).filter(g => g.monto > 0)
+}
+function eqTotalFijos(cfg) { return eqGastosFijos(cfg).reduce((a, g) => a + g.monto, 0) }
+
+function renderFijosAjustes(lista) {
+  const cont = document.getElementById('eq-fijos-lista')
+  cont.innerHTML = lista.map((g, i) => `
+    <div class="eq-fila">
+      <input type="text" class="eq-nombre" value="${String(g.nombre || '').replace(/"/g, '&quot;')}" placeholder="Ej: Alquiler" />
+      <input type="number" class="eq-monto" value="${g.monto || ''}" min="0" placeholder="0" />
+      <button type="button" class="cuota-borrar" onclick="eliminarFijoAjustes(${i})"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button>
+    </div>`).join('')
+  cont.querySelectorAll('.eq-monto').forEach(inp => inp.addEventListener('input', actualizarTotalFijos))
+  actualizarTotalFijos()
+  lucide.createIcons()
+}
+function leerFijosDelDOM() {
+  return Array.from(document.querySelectorAll('#eq-fijos-lista .eq-fila')).map(f => ({
+    nombre: f.querySelector('.eq-nombre').value.trim(),
+    monto: parseFloat(f.querySelector('.eq-monto').value) || 0
+  }))
+}
+function eliminarFijoAjustes(i) { const l = leerFijosDelDOM(); l.splice(i, 1); renderFijosAjustes(l) }
+function actualizarTotalFijos() {
+  document.getElementById('eq-fijos-total').textContent = rMoneda(leerFijosDelDOM().reduce((a, g) => a + g.monto, 0))
+}
+function cargarFijosAjustes() {
+  const cfg = negocioActual.equilibrio_config || {}
+  let lista = eqGastosFijos(cfg)
+  if (!Array.isArray(cfg.gastos_fijos) && lista.length === 0) {
+    lista = ['Alquiler', 'Sueldos / personal', 'Servicios', 'Publicidad'].map(n => ({ nombre: n, monto: 0 }))
+  }
+  renderFijosAjustes(lista)
+}
+async function guardarEquilibrioNuevo() {
+  const msg = document.getElementById('ajustes-mensaje-equilibrio')
+  const gastos = leerFijosDelDOM().filter(g => g.nombre || g.monto > 0).map(g => ({ nombre: g.nombre || 'Sin nombre', monto: g.monto }))
+  const cfg = {
+    gastos_fijos: gastos,
+    variables_pct: parseFloat(document.getElementById('eq-variables').value) || 0,
+    objetivo: parseFloat(document.getElementById('eq-objetivo').value) || 0
+  }
+  const { error } = await db.from('negocios').update({ equilibrio_config: cfg }).eq('id', negocioActual.id)
+  if (error) { msg.style.color = '#dc2626'; msg.textContent = 'Error al guardar'; return }
+  negocioActual.equilibrio_config = cfg
+  msg.style.color = 'var(--verde)'
+  msg.textContent = 'Guardado!'
+}
+
+;(function prepararFijosEditables() {
+  ;['eq-alquiler', 'eq-personal', 'eq-servicios', 'eq-publicidad', 'eq-otros'].forEach(id => {
+    const c = document.getElementById(id)
+    if (c) c.closest('.campo').style.display = 'none'
+  })
+  const ancla = document.getElementById('eq-variables')
+  if (!ancla) return
+  ancla.closest('.campo').insertAdjacentHTML('beforebegin', `
+    <div class="campo">
+      <label>Gastos fijos por mes</label>
+      <div id="eq-fijos-lista" style="display:flex; flex-direction:column; gap:8px"></div>
+      <button type="button" class="btn-gris" id="btn-eq-agregar" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:4px">
+        <i data-lucide="plus" style="width:15px;height:15px"></i> Agregar gasto fijo
+      </button>
+      <p style="font-size:13px; margin-top:6px">Total: <strong id="eq-fijos-total">$0</strong> por mes</p>
+    </div>
+  `)
+  const btn = document.getElementById('btn-guardar-equilibrio')
+  if (btn) { const n = btn.cloneNode(true); btn.replaceWith(n); n.addEventListener('click', guardarEquilibrioNuevo) }
+  document.getElementById('btn-eq-agregar').addEventListener('click', () => {
+    const l = leerFijosDelDOM(); l.push({ nombre: '', monto: 0 }); renderFijosAjustes(l)
+  })
+  document.getElementById('btn-abrir-ajustes')?.addEventListener('click', cargarFijosAjustes)
+})()
+
+// ═══════ 2) SIMULADOR: SE DIBUJA AL ENTRAR A LA PESTAÑA INVENTARIO ═══════
+function repSimuladorSeguro() {
+  let el = document.getElementById('rep-simulador')
+  if (!el) {
+    const card = document.createElement('div')
+    card.className = 'grafico-card'
+    card.innerHTML = '<h3 class="grafico-titulo">Simulador de liquidación</h3><div id="rep-simulador"></div>'
+    document.getElementById('rep-pane-inventario')?.appendChild(card)
+    el = document.getElementById('rep-simulador')
+    if (!el) return
+  }
+  if (!repCache) { el.innerHTML = rVacio('Apretá "Generar" para cargar los datos del simulador.'); return }
+  if (typeof repRenderSimulador !== 'function') { el.innerHTML = rVacio('Falta pegar el bloque del simulador del mensaje anterior.'); return }
+  try { repRenderSimulador() } catch (e) {
+    console.error('Simulador:', e)
+    el.innerHTML = `<p style="color:#dc2626; font-size:14px">No se pudo armar el simulador: ${e.message}</p>`
+  }
+}
+document.querySelector('#rep-tabs [data-rep="inventario"]')?.addEventListener('click', repSimuladorSeguro)
+
+// ═══════ 3) CADA INFO SENSIBLE CON SU PROPIO CANDADO ═══════
+const ZONAS = ['costos', 'inventario', 'acciones_prod', 'ganancia', 'acciones_venta', 'equilibrio']
+
+// reemplaza al desbloqueo global viejo: ya no desbloquea nada
+function toggleInfoSensible() { sincronizarPin() }
+function sincronizarPin() {
+  document.body.classList.toggle('con-pin', !!(negocioActual && negocioActual.pin_seguridad))
+}
+function zonaAbierta(z) { return document.body.classList.contains('z-' + z) }
+function setZona(z, abrir) {
+  document.body.classList.toggle('z-' + z, abrir)
+  document.querySelectorAll(`.btn-candado[data-zona="${z}"]`).forEach(b => {
+    b.innerHTML = `<i data-lucide="${abrir ? 'unlock' : 'lock'}" style="width:14px;height:14px"></i>${b.dataset.etiqueta || ''}`
+  })
+  lucide.createIcons()
+}
+function cerrarTodasLasZonas() {
+  ZONAS.forEach(z => setZona(z, false))
+  document.body.classList.remove('z-compras')
+}
+function alternarZona(z) {
+  if (zonaAbierta(z)) { setZona(z, false); return }
+  pedirPin('Ingresá tu PIN para ver esta información', () => setZona(z, true))
+}
+
+// PIN genérico (una sola casilla)
+let pinGenAccion = null, pinGenCancel = null, pinGenIntentos = 0, pinGenBloqueo = 0
+
+function pedirPin(mensaje, alExito, alCancelar) {
+  if (!negocioActual || !negocioActual.pin_seguridad) { alExito(); return }
+  if (Date.now() < pinGenBloqueo) {
+    mostrarToast('PIN bloqueado por intentos fallidos. Esperá unos segundos.', 'error')
+    if (alCancelar) alCancelar()
+    return
+  }
+  pinGenAccion = alExito
+  pinGenCancel = alCancelar || null
+  document.getElementById('pin-gen-mensaje').textContent = mensaje
+  document.getElementById('pin-gen-input').value = ''
+  document.getElementById('pin-gen-error').textContent = ''
+  document.getElementById('modal-pin-gen').style.display = 'flex'
+  lucide.createIcons()
+  document.getElementById('pin-gen-input').focus()
+}
+function cerrarPinGen(cancelado) {
+  document.getElementById('modal-pin-gen').style.display = 'none'
+  const c = pinGenCancel
+  pinGenAccion = null
+  pinGenCancel = null
+  if (cancelado && c) c()
+}
+function confirmarPinGen() {
+  const input = document.getElementById('pin-gen-input')
+  if (input.value === negocioActual.pin_seguridad) {
+    const f = pinGenAccion
+    pinGenIntentos = 0
+    cerrarPinGen(false)
+    if (f) f()
+    return
+  }
+  pinGenIntentos++
+  input.value = ''
+  if (pinGenIntentos >= MAX_INTENTOS_PIN) {
+    pinGenIntentos = 0
+    pinGenBloqueo = Date.now() + 30000
+    cerrarPinGen(true)
+    mostrarToast('PIN bloqueado por 3 intentos fallidos. Esperá 30 segundos.', 'error')
+    return
+  }
+  document.getElementById('pin-gen-error').textContent = `PIN incorrecto. Te quedan ${MAX_INTENTOS_PIN - pinGenIntentos} intento${MAX_INTENTOS_PIN - pinGenIntentos === 1 ? '' : 's'}`
+  input.focus()
+}
+
+const btnCandadoHTML = (zona, etiqueta = '') =>
+  `<button type="button" class="btn-candado" data-zona="${zona}" data-etiqueta="${etiqueta ? ' ' + etiqueta : ''}" title="Ver / ocultar" style="background:none; border:none; cursor:pointer; color:var(--texto-suave); vertical-align:middle; padding:0 4px; display:inline-flex; align-items:center; gap:4px; font-size:12px"><i data-lucide="lock" style="width:14px;height:14px"></i>${etiqueta ? ' ' + etiqueta : ''}</button>`
+
+;(function prepararCandados() {
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="modal-pin-gen" style="display:none">
+      <div class="modal" style="max-width:320px">
+        <div class="modal-header">
+          <h3 style="display:flex; align-items:center; gap:8px"><i data-lucide="lock" style="width:18px;height:18px;color:var(--verde)"></i> PIN de seguridad</h3>
+          <button class="btn-cerrar" id="btn-cerrar-pin-gen"><i data-lucide="x"></i></button>
+        </div>
+        <div class="modal-body" style="text-align:center; gap:12px">
+          <p id="pin-gen-mensaje" style="font-size:14px; color:var(--texto-suave)"></p>
+          <input type="password" id="pin-gen-input" maxlength="4" inputmode="numeric" autocomplete="off" style="width:150px; height:52px; margin:0 auto; padding:0; text-align:center; font-size:22px; font-weight:bold; letter-spacing:8px; border-radius:10px; border:2px solid var(--borde); background:var(--fondo); color:var(--texto)" />
+          <p id="pin-gen-error" style="color:#dc2626; font-size:13px; min-height:18px"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-gris" id="btn-cancelar-pin-gen">Cancelar</button>
+          <button class="btn-verde" id="btn-confirmar-pin-gen" style="justify-content:center">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  `)
+  document.getElementById('btn-confirmar-pin-gen').addEventListener('click', confirmarPinGen)
+  document.getElementById('btn-cancelar-pin-gen').addEventListener('click', () => cerrarPinGen(true))
+  document.getElementById('btn-cerrar-pin-gen').addEventListener('click', () => cerrarPinGen(true))
+  document.getElementById('pin-gen-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmarPinGen() })
+
+  // candado de Costo/Ganancia (el que ya existía): ahora solo abre "costos"
+  const viejo = document.getElementById('btn-toggle-pin')
+  if (viejo) {
+    const nuevo = viejo.cloneNode(true)
+    nuevo.className = 'btn-candado'
+    nuevo.dataset.zona = 'costos'
+    viejo.replaceWith(nuevo)
+  }
+  // acciones de Productos
+  document.querySelector('#seccion-productos thead th:last-child')?.insertAdjacentHTML('beforeend', ' ' + btnCandadoHTML('acciones_prod'))
+  // valor del inventario
+  document.getElementById('card-valor-inventario')?.insertAdjacentHTML('beforebegin',
+    `<div style="margin-bottom:6px; font-size:12px; color:var(--texto-suave)">${btnCandadoHTML('inventario', 'Valor del inventario')}</div>`)
+  // historial: ganancia y acciones
+  const ths = document.getElementById('tabla-historial')?.closest('table').querySelectorAll('thead th')
+  if (ths && ths.length >= 8) {
+    ths[6].innerHTML = 'Ganancia ' + btnCandadoHTML('ganancia')
+    ths[7].innerHTML = btnCandadoHTML('acciones_venta')
+  }
+  // tarjeta de equilibrio del Dashboard
+  const bDash = document.getElementById('dash-equilibrio')?.closest('.grafico-card')?.querySelector('button')
+  if (bDash) { bDash.removeAttribute('onclick'); bDash.classList.add('btn-candado'); bDash.dataset.zona = 'equilibrio' }
+})()
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.btn-candado')
+  if (b) alternarZona(b.dataset.zona)
+})
+
+// los botones del historial se renderizan de nuevo en cada carga: el CSS manda, no el atributo disabled
+const tbodyHistorial = document.getElementById('tabla-historial')
+if (tbodyHistorial) {
+  new MutationObserver(() => {
+    tbodyHistorial.querySelectorAll('.btn-rojo, .btn-editar').forEach(b => { b.disabled = false; b.style.opacity = ''; b.style.cursor = '' })
+  }).observe(tbodyHistorial, { childList: true })
+}
+
+document.querySelectorAll('.menu-item').forEach(i => i.addEventListener('click', sincronizarPin))
+document.getElementById('btn-confirmar-cerrar-sesion')?.addEventListener('click', () => {
+  cerrarTodasLasZonas()
+  document.body.classList.remove('con-pin')
+})
+
+// ═══════ 4) COMPRAS: PIN PARA ENTRAR ═══════
+document.querySelector('.sidebar-menu')?.addEventListener('click', e => {
+  const item = e.target.closest('.menu-item')
+  if (!item) return
+  if (item.dataset.seccion !== 'compras') { document.body.classList.remove('z-compras'); return }
+  if (zonaAbierta('compras') || !negocioActual || !negocioActual.pin_seguridad) return
+  e.stopPropagation()
+  document.getElementById('sidebar').classList.remove('mobile-abierto')
+  document.getElementById('sidebar-overlay').classList.remove('visible')
+  pedirPin('Ingresá tu PIN para entrar a Compras', () => { document.body.classList.add('z-compras'); item.click() })
+}, true)
+;['btn-abrir-ajustes', 'btn-ir-dashboard'].forEach(id =>
+  document.getElementById(id)?.addEventListener('click', () => document.body.classList.remove('z-compras')))
+
+// ═══════ 5) APERTURA DE CAJA: BOTÓN "AHORA NO" ═══════
+document.getElementById('modal-apertura-caja')?.querySelector('.modal-footer')
+  ?.insertAdjacentHTML('afterbegin', '<button class="btn-gris" id="btn-apertura-omitir">Ahora no</button>')
+document.getElementById('btn-apertura-omitir')?.addEventListener('click', () => {
+  try { sessionStorage.setItem('apertura-omitida', negocioActual.id + '|' + new Date().toDateString()) } catch (e) {}
+  document.getElementById('modal-apertura-caja').style.display = 'none'
+  mostrarToast('Podés abrir la caja cuando quieras desde la sección Caja.')
+})
+
+// ═══════ 6) PDF DEL REPORTE: UNA SOLA HOJA, MUCHO MÁS COMPLETO ═══════
+function repCalcEquilibrio(totalVentas, costoMerc, unidades) {
+  const cfg = negocioActual.equilibrio_config || {}
+  const fijos = eqTotalFijos(cfg)
+  if (fijos <= 0 || totalVentas <= 0 || unidades <= 0) return null
+  const varPct = Math.min((Number(cfg.variables_pct) || 0) / 100, 0.9)
+  const margen = (totalVentas - costoMerc - totalVentas * varPct) / totalVentas
+  if (margen <= 0) return null
+  const precioProm = totalVentas / unidades
+  return { fijos, margen, eq: fijos / margen, eqUnid: Math.ceil(fijos / (precioProm * margen)) }
+}
+
+function descargarReportePDF() {
+  const d = window.repPDF
+  if (!d) { mostrarToast('Generá el reporte primero', 'error'); return }
+  const { jsPDF } = window.jspdf
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+
+  const verde = [22, 163, 74], rojo = [220, 38, 38], ambar = [180, 83, 9], naranja = [245, 158, 11]
+  const gris = [105, 110, 108], oscuro = [30, 30, 30], fondo = [244, 247, 245], borde = [215, 222, 218], blanco = [255, 255, 255]
+  const mon = n => (n < 0 ? '-' : '') + rMoneda(Math.abs(n))
+  const fmtF = s => s.split('-').reverse().join('/')
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1)
+  const cortar = (t, n) => { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1) + '.' : t }
+  const pctV = n => d.totalVentas > 0 ? rPct((n / d.totalVentas) * 100) : '0%'
+
+  const txt = (t, x, y, o = {}) => {
+    doc.setFont('helvetica', o.b ? 'bold' : 'normal')
+    doc.setFontSize(o.s || 7.5)
+    doc.setTextColor(...(o.c || oscuro))
+    doc.text(String(t), x, y, { align: o.a || 'left' })
+  }
+  const caja = (x, y, w, h, titulo, color = verde) => {
+    doc.setDrawColor(...borde); doc.setFillColor(...blanco)
+    doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD')
+    doc.setFillColor(...color); doc.rect(x, y + 0.6, 1.2, h - 1.2, 'F')
+    txt(titulo.toUpperCase(), x + 4, y + 5, { b: 1, s: 6.8, c: color })
+  }
+  const kv = (x, w, y, k, v, c, b) => {
+    txt(k, x + 4, y, { b, c: b ? oscuro : gris })
+    txt(v, x + w - 3, y, { b, c: c || oscuro, a: 'right' })
+  }
+  const tabla = (x, y, w, cols, filas, vacio = 'Sin datos en el período') => {
+    const x0 = x + 4, iw = w - 7
+    let cx = x0
+    cols.forEach(c => { c.x = cx; c.pw = c.w * iw; cx += c.pw })
+    cols.forEach(c => txt(c.t, c.a === 'right' ? c.x + c.pw : c.x, y, { b: 1, s: 6.3, c: gris, a: c.a }))
+    doc.setDrawColor(...borde); doc.line(x0, y + 1.3, x0 + iw, y + 1.3)
+    if (filas.length === 0) { txt(vacio, x0, y + 6, { s: 7, c: gris }); return }
+    filas.forEach((f, i) => {
+      const yy = y + 5 + i * 4.2
+      f.forEach((cell, j) => {
+        const c = cols[j]
+        const [t, col] = Array.isArray(cell) ? cell : [cell, oscuro]
+        txt(t, c.a === 'right' ? c.x + c.pw : c.x, yy, { s: 7, c: col, a: c.a })
+      })
+    })
+  }
+
+  // ── ENCABEZADO ──
+  doc.setFillColor(...verde); doc.rect(0, 0, 210, 22, 'F')
+  txt('FINESSE POS', 10, 10, { b: 1, s: 16, c: blanco })
+  txt('Reporte de ventas y rentabilidad', 10, 16.5, { s: 8.5, c: blanco })
+  txt(negocioActual.nombre, 200, 10, { b: 1, s: 11, c: blanco, a: 'right' })
+  txt(`Período ${fmtF(d.desde)} al ${fmtF(d.hasta)}  |  Generado ${new Date().toLocaleDateString('es-AR')}`, 200, 16.5, { s: 8, c: blanco, a: 'right' })
+
+  // ── INDICADORES ──
+  const margenBruto = d.totalVentas > 0 ? ((d.totalVentas - d.costoMerc) / d.totalVentas) * 100 : 0
+  const kpis = [
+    ['Ventas', mon(d.totalVentas), verde],
+    ['Ganancia neta real', mon(d.neta), d.neta >= 0 ? verde : rojo],
+    ['Cantidad de ventas', String(d.nVentas), oscuro],
+    ['Ticket promedio', mon(d.nVentas ? d.totalVentas / d.nVentas : 0), oscuro],
+    ['Unidades vendidas', String(d.unidades), oscuro],
+    ['Margen bruto', rPct(margenBruto), oscuro]
+  ]
+  kpis.forEach((k, i) => {
+    const x = 10 + i * 32
+    doc.setFillColor(...fondo); doc.roundedRect(x, 26, 30, 15, 1.5, 1.5, 'F')
+    txt(k[0].toUpperCase(), x + 3, 31, { s: 5.8, c: gris, b: 1 })
+    txt(k[1], x + 3, 37.5, { s: 10.5, b: 1, c: k[2] })
+  })
+
+  // ── A) ESTADO DE RESULTADOS + EQUILIBRIO ──
+  let y = 44
+  const gBruta = d.totalVentas - d.costoMerc
+  caja(10, y, 93, 40, 'Estado de resultados')
+  kv(10, 93, y + 11, 'Ventas', mon(d.totalVentas), verde, true)
+  kv(10, 93, y + 15.8, 'Costo de la mercadería vendida', '-' + mon(d.costoMerc), rojo)
+  kv(10, 93, y + 20.6, `Ganancia bruta (${pctV(gBruta)})`, mon(gBruta))
+  kv(10, 93, y + 25.4, 'Gastos operativos (egresos de caja)', '-' + mon(d.totalGastos), rojo)
+  kv(10, 93, y + 30.2, 'Envíos de compras', '-' + mon(d.totalEnvios), rojo)
+  doc.setDrawColor(...borde); doc.line(14, y + 32.3, 99, y + 32.3)
+  kv(10, 93, y + 36.8, `Ganancia neta real (${pctV(d.neta)})`, mon(d.neta), d.neta >= 0 ? verde : rojo, true)
+
+  caja(107, y, 93, 40, 'Equilibrio y descuentos', ambar)
+  const eqd = repCalcEquilibrio(d.totalVentas, d.costoMerc, d.unidades)
+  if (eqd) {
+    const diasPer = Math.max(1, Math.round((new Date(d.hasta) - new Date(d.desde)) / 86400000) + 1)
+    const eqPer = (eqd.eq * diasPer) / 30
+    kv(107, 93, y + 11, 'Costos fijos mensuales', mon(eqd.fijos))
+    kv(107, 93, y + 15.8, 'Margen de contribución', rPct(eqd.margen * 100))
+    kv(107, 93, y + 20.6, 'Equilibrio mensual', `${mon(eqd.eq)} (${eqd.eqUnid} unid.)`, oscuro, true)
+    kv(107, 93, y + 25.4, `Equilibrio del período (${diasPer} días)`, mon(eqPer))
+    kv(107, 93, y + 30.2, 'Ventas / equilibrio del período', rPct((d.totalVentas / eqPer) * 100, 0), d.totalVentas >= eqPer ? verde : rojo, true)
+  } else {
+    txt('Cargá tus gastos fijos en Ajustes para ver el equilibrio.', 111, y + 11, { s: 7, c: gris })
+  }
+  doc.line(111, y + 32.3, 196, y + 32.3)
+  const brutas = d.totalVentas + d.totalDesc
+  kv(107, 93, y + 35.2, 'Descuentos otorgados', `${mon(d.totalDesc)} (${brutas > 0 ? rPct((d.totalDesc / brutas) * 100) : '0%'})`, rojo)
+  kv(107, 93, y + 38.6, 'Cortesías', `${d.cortesiasUnid} unid. (${mon(d.valorCortesias)})`, rojo)
+
+  // ── B) TOP PRODUCTOS + MÉTODOS DE PAGO ──
+  y = 88
+  caja(10, y, 118, 47, 'Top productos por ganancia (Pareto)')
+  tabla(10, y + 9.5, 118, [
+    { t: '#', w: .05 }, { t: 'Producto', w: .33 }, { t: 'Unid.', w: .09, a: 'right' },
+    { t: 'Ventas', w: .17, a: 'right' }, { t: 'Ganancia', w: .17, a: 'right' }, { t: 'Margen', w: .11, a: 'right' }, { t: 'Cl.', w: .08, a: 'right' }
+  ], d.productos.map((p, i) => [i + 1, cortar(p.n, 22), p.u, mon(p.v), [mon(p.g), p.g >= 0 ? verde : rojo], rPct(p.m, 0), [p.c, p.c === 'A' ? verde : p.c === 'B' ? ambar : rojo]]), 'Sin ventas en el período')
+
+  caja(132, y, 68, 47, 'Ventas por método de pago')
+  tabla(132, y + 9.5, 68, [
+    { t: 'Método', w: .34 }, { t: 'Vendido', w: .30, a: 'right' }, { t: 'Com.', w: .14, a: 'right' }, { t: 'Costo', w: .22, a: 'right' }
+  ], [...d.comisiones].sort((a, b) => b.monto - a.monto).map(f => [cap(f.m), mon(f.monto), rPct(f.p, 1), [mon(f.costo), rojo]]))
+  txt(`Comisiones: ${mon(d.totalCom)} (${pctV(d.totalCom)} de las ventas)`, 136, y + 43, { s: 6.8, b: 1, c: rojo })
+
+  // ── C) DÍA DE LA SEMANA + GASTOS ──
+  y = 139
+  caja(10, y, 93, 36, 'Ventas por día de la semana')
+  const maxT = Math.max(...d.porDia.map(p => p.t), 0)
+  const minT = Math.min(...d.porDia.map(p => p.t))
+  d.porDia.forEach((p, i) => {
+    const yy = y + 10.5 + i * 3.6
+    txt(p.d, 14, yy, { s: 7, c: gris })
+    doc.setFillColor(...borde); doc.rect(24, yy - 2.3, 36, 2.5, 'F')
+    if (maxT > 0 && p.t > 0) {
+      doc.setFillColor(...(p.t === maxT ? verde : p.t === minT ? rojo : naranja))
+      doc.rect(24, yy - 2.3, Math.max(0.5, (36 * p.t) / maxT), 2.5, 'F')
+    }
+    txt(`${mon(p.t)} (${p.v})`, 100, yy, { s: 6.8, a: 'right' })
+  })
+
+  caja(107, y, 93, 36, 'Gastos por categoría', rojo)
+  tabla(107, y + 9.5, 93, [
+    { t: 'Categoría', w: .4 }, { t: 'Monto', w: .3, a: 'right' }, { t: '% de ventas', w: .3, a: 'right' }
+  ], d.gastos.map(([c, m]) => [cap(c), [mon(m), rojo], pctV(m)]), 'Sin gastos en el período')
+
+  // ── D) INVENTARIO ──
+  y = 179
+  caja(10, y, 93, 36, 'Inventario: se agota pronto', ambar)
+  tabla(10, y + 9.5, 93, [
+    { t: 'Producto', w: .46 }, { t: 'Stock', w: .14, a: 'right' }, { t: 'Días', w: .16, a: 'right' }, { t: 'Reponer 30d', w: .24, a: 'right' }
+  ], d.diasStock.map(f => [cortar(f.n, 24), f.s, [f.d <= 0 ? 'Agotado' : String(Math.floor(f.d)), f.d <= 7 ? rojo : f.d <= 15 ? ambar : verde], f.r > 0 ? String(f.r) : '-']), 'Nada se agota en 30 días')
+
+  const limite = Date.now() - 60 * 86400000
+  const prods = (repCache && repCache.productos) || []
+  const muertos = prods.filter(p => p.stock > 0 && !(repCache.ultimaVenta[p.id] >= limite))
+    .map(p => ({ p, inmov: p.stock * (Number(p.costo) || 0) })).sort((a, b) => b.inmov - a.inmov)
+  const totInm = muertos.reduce((a, f) => a + f.inmov, 0)
+  const valInv = prods.reduce((a, p) => a + p.stock * (Number(p.costo) || 0), 0)
+  caja(107, y, 93, 36, 'Stock muerto (60 días sin ventas)', rojo)
+  kv(107, 93, y + 11, 'Productos parados', String(muertos.length))
+  kv(107, 93, y + 15.6, 'Plata inmovilizada (a costo)', mon(totInm), rojo, true)
+  kv(107, 93, y + 20.2, '% del valor del inventario', valInv > 0 ? rPct((totInm / valInv) * 100, 0) : '-')
+  muertos.slice(0, 3).forEach((f, i) => {
+    txt(cortar(f.p.nombre, 34), 111, y + 26.5 + i * 3.6, { s: 6.8, c: gris })
+    txt(mon(f.inmov), 196, y + 26.5 + i * 3.6, { s: 6.8, a: 'right' })
+  })
+
+  // ── E) PROVEEDORES + CLIENTES ──
+  y = 219
+  caja(10, y, 93, 34, 'Proveedores (Pareto de compras)')
+  tabla(10, y + 9.5, 93, [
+    { t: 'Proveedor', w: .5 }, { t: 'Monto', w: .25, a: 'right' }, { t: '%', w: .15, a: 'right' }, { t: 'Cl.', w: .10, a: 'right' }
+  ], d.proveedores.map(p => [cortar(p.n, 26), mon(p.m), rPct(p.p, 0), [p.c, p.c === 'A' ? verde : p.c === 'B' ? ambar : rojo]]), 'Sin compras en el período')
+
+  caja(107, y, 93, 34, 'Clientes')
+  tabla(107, y + 9.5, 93, [
+    { t: 'Mejores clientes', w: .5 }, { t: 'Compras', w: .18, a: 'right' }, { t: 'Total', w: .32, a: 'right' }
+  ], d.clientes.map(c => [cortar(c.n, 26), c.k, mon(c.t)]), 'Sin clientes cargados')
+  txt(`${d.inactivosTotal} cliente(s) sin comprar hace más de ${REP_DIAS_INACTIVO} días`, 111, y + 31.5, { s: 6.8, b: 1, c: ambar })
+
+  // ── F) CONCLUSIONES ──
+  y = 257
+  caja(10, y, 190, 26, 'Conclusiones y alertas', verde)
+  const conc = []
+  conc.push(`Ganancia neta de ${mon(d.neta)} (${pctV(d.neta)} de las ventas) sobre ${mon(d.totalVentas)} vendidos en ${d.nVentas} ventas.`)
+  if (d.claseA > 0) conc.push(`Concentración: ${d.claseA} producto(s) clase A generan el 80% de la ganancia, entre ellos ${d.productos.filter(p => p.c === 'A').slice(0, 3).map(p => cortar(p.n, 18)).join(', ')}.`)
+  if (muertos.length) conc.push(`Inventario: ${muertos.length} productos sin ventas en 60 días inmovilizan ${mon(totInm)} (${valInv > 0 ? rPct((totInm / valInv) * 100, 0) : '0%'} del inventario). Candidatos a liquidar.`)
+  if (d.totalGastos > 0 && d.gastos[0]) conc.push(`Los gastos operativos fueron ${pctV(d.totalGastos)} de las ventas; el mayor rubro es ${cap(d.gastos[0][0])} (${mon(d.gastos[0][1])}).`)
+  if (d.proveedores[0]) conc.push(`Compras: ${cortar(d.proveedores[0].n, 24)} concentra el ${rPct(d.proveedores[0].p, 0)} de lo comprado en el período.`)
+  if (d.repos[0] && d.repos[0].dif > 0) conc.push(`Costos: reponer ${cortar(d.repos[0].n, 24)} cuesta ${rPct(d.repos[0].dif, 0)} más que tu costo cargado. Revisá los precios.`)
+  if (d.sinCosto > 0) conc.push(`Atención: ${d.sinCosto} items vendidos no tienen costo cargado y cuentan como $0 (la ganancia puede estar inflada).`)
+  conc.slice(0, 5).forEach((l, i) => txt('- ' + cortar(l, 138), 14, y + 10.5 + i * 3.9, { s: 7.2 }))
+
+  // ── PIE ──
+  doc.setFillColor(...verde); doc.rect(0, 287, 210, 10, 'F')
+  txt('Powered by Finesse POS', 105, 293, { s: 8, c: blanco, a: 'center' })
+
+  doc.save(`reporte-${negocioActual.nombre.toLowerCase().replace(/ /g, '-')}-${d.desde}-${d.hasta}.pdf`)
+}
+
+;(function prepararPDFReporte() {
+  const b = document.getElementById('btn-descargar-reporte-pdf')
+  if (!b) return
+  const n = b.cloneNode(true)
+  b.replaceWith(n)
+  n.addEventListener('click', descargarReportePDF)
+})()
 
 lucide.createIcons()
 
