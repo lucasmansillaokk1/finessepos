@@ -1460,6 +1460,8 @@ async function cargarDashboard() {
 
   cargarEquilibrioDashboard()
 
+  cargarComparativaMensual()
+
   // VENTAS ÚLTIMOS 7 DÍAS
   const { data: ventas7dias } = await db
     .from('ventas')
@@ -5971,3 +5973,212 @@ lucide.createIcons()
 document.getElementById('btn-cancelar-cerrar-sesion-x').addEventListener('click', () => {
   document.getElementById('modal-cerrar-sesion').style.display = 'none'
 })
+
+// ── SIMULADOR DE LIQUIDACIÓN ──
+var simDescLiq = 30
+
+function repRenderSimulador() {
+  const el = document.getElementById('rep-simulador')
+  if (!el || !repCache) return
+  const dias = parseInt(document.getElementById('rep-muerto-dias').value)
+  const limite = Date.now() - dias * 86400000
+  const varPct = Math.min((Number((negocioActual.equilibrio_config || {}).variables_pct) || 0) / 100, 0.9)
+
+  const lista = repCache.productos
+    .filter(p => p.stock > 0 && !(repCache.ultimaVenta[p.id] >= limite))
+    .map(p => {
+      const costo = Number(p.costo) || 0
+      const precio = Number(p.precio) || 0
+      const piso = costo > 0 ? costo / (1 - varPct) : 0
+      return { p, costo, precio, piso, inmov: p.stock * costo, descMax: costo > 0 && precio > 0 ? Math.max(0, (1 - piso / precio) * 100) : null }
+    })
+    .sort((a, b) => b.inmov - a.inmov)
+
+  if (lista.length === 0) {
+    el.innerHTML = rVacio('No hay stock parado con ese filtro: no hay nada para liquidar.')
+    return
+  }
+
+  const conCosto = lista.filter(f => f.costo > 0 && f.precio > 0)
+  const sinCosto = lista.length - conCosto.length
+  const seguro = conCosto.length ? Math.floor(Math.min(...conCosto.map(f => f.descMax))) : 0
+
+  const calc = d => {
+    let caja = 0, perdidos = 0
+    conCosto.forEach(f => {
+      const neto = f.precio * (1 - d / 100) * (1 - varPct)
+      caja += f.p.stock * neto
+      if (neto < f.costo) perdidos++
+    })
+    const inmov = rSuma(conCosto, f => f.inmov)
+    return { caja, inmov, resultado: caja - inmov, perdidos }
+  }
+
+  el.innerHTML = `
+    <div class="campo">
+      <label>Descuento sobre el precio de lista: <strong id="sim-valor">${simDescLiq}%</strong></label>
+      <input type="range" id="sim-slider" min="0" max="80" step="1" value="${simDescLiq}" style="padding:0; border:none; background:none" />
+    </div>
+    <div id="sim-resultado"></div>
+  `
+
+  const pintar = () => {
+    const d = simDescLiq
+    const r = calc(d)
+    const filas = lista.slice(0, 15).map(f => {
+      const liq = f.precio * (1 - d / 100)
+      const res = f.costo > 0 ? (liq * (1 - varPct) - f.costo) * f.p.stock : null
+      return [
+        f.p.nombre,
+        f.p.stock,
+        f.costo ? rMoneda(f.costo) : 'Sin costo',
+        f.precio ? rMoneda(f.precio) : '-',
+        `<strong>${rMoneda(liq)}</strong>`,
+        f.piso ? rMoneda(f.piso) : '-',
+        f.descMax === null ? '-' : rPct(f.descMax, 0),
+        res === null ? '-' : `<span style="font-weight:700; color:${res >= 0 ? 'var(--verde)' : '#dc2626'}">${res >= 0 ? 'Gana ' : 'Pierde '}${rMoneda(Math.abs(res))}</span>`
+      ]
+    })
+    const escenarios = [10, 20, 30, 40, 50].map(x => ({ x, ...calc(x) }))
+
+    document.getElementById('sim-resultado').innerHTML = `
+      <div class="rep-kpis">
+        ${rKpi('Plata parada (a costo)', rMoneda(r.inmov), '#dc2626')}
+        ${rKpi('Entra en caja si vendés todo', rMoneda(r.caja), 'var(--verde)')}
+        ${rKpi('Resultado vs costo', (r.resultado >= 0 ? '+' : '-') + rMoneda(Math.abs(r.resultado)), r.resultado >= 0 ? 'var(--verde)' : '#dc2626')}
+        ${rKpi('Productos que pierden', `${r.perdidos} de ${conCosto.length}`, r.perdidos ? '#dc2626' : 'var(--verde)')}
+      </div>
+      ${rNota(`Hasta un <strong>${seguro}%</strong> de descuento ningún producto pierde plata. El piso incluye tus impuestos y comisiones de Ajustes (${rPct(varPct * 100)}), no los costos fijos.${sinCosto > 0 ? ` ${sinCosto} producto(s) sin costo cargado no entran en los totales.` : ''}`)}
+      ${rTabla(
+        [{ t: 'Producto' }, { t: 'Stock', n: 1 }, { t: 'Costo', n: 1 }, { t: 'Lista', n: 1 }, { t: 'Con desc.', n: 1 }, { t: 'Piso', n: 1 }, { t: 'Desc. máx.', n: 1 }, { t: 'Resultado', n: 1 }],
+        filas
+      )}
+      <p style="font-weight:600; font-size:14px; margin:18px 0 8px">Comparación de descuentos (todo el stock parado)</p>
+      ${rTabla(
+        [{ t: 'Descuento' }, { t: 'Entra en caja', n: 1 }, { t: 'Resultado vs costo', n: 1 }, { t: 'Pierden', n: 1 }],
+        escenarios.map(e => [
+          `${e.x}%`,
+          rMoneda(e.caja),
+          `<span style="font-weight:700; color:${e.resultado >= 0 ? 'var(--verde)' : '#dc2626'}">${e.resultado >= 0 ? '+' : '-'}${rMoneda(Math.abs(e.resultado))}</span>`,
+          `${e.perdidos} de ${conCosto.length}`
+        ])
+      )}
+      ${rNota('Vender con resultado negativo no siempre es malo: esa plata ya la gastaste, y recuperarla te sirve para reponer lo que sí rota. Asume que vendés todo el stock parado; si vendés solo una parte, es proporcional.')}
+    `
+  }
+
+  document.getElementById('sim-slider').addEventListener('input', e => {
+    simDescLiq = parseInt(e.target.value)
+    document.getElementById('sim-valor').textContent = simDescLiq + '%'
+    pintar()
+  })
+  pintar()
+}
+
+// se vuelve a dibujar al cambiar el filtro de días y cada vez que generás el reporte
+document.getElementById('rep-muerto-dias')?.addEventListener('change', () => repSimuladorSeguro())
+
+if (typeof cargarAnalisisReportes === 'function') {
+  const _cargarAnalisisBase = cargarAnalisisReportes
+  cargarAnalisisReportes = async function (...args) {
+    await _cargarAnalisisBase(...args)
+    repSimuladorSeguro()
+  }
+}
+
+// ── COMPARATIVA: TARJETA MENSUAL + ORDEN ──
+// orden de las tarjetas, de la más importante a la menos
+const COMP_ORDEN = ['mes', 'semana', 'trans', 'ticket']
+
+;(function prepararComparativaMensual() {
+  const grid = document.querySelector('.comparativa-grid')
+  if (!grid) return
+
+  const titulo = document.querySelector('.comparativa-wrapper h3')
+  if (titulo) titulo.textContent = 'Comparativa de ventas'
+
+  const rotulos = { 'comp-total-actual': 'Ventas de la semana', 'comp-trans-actual': 'Transacciones de la semana', 'comp-ticket-actual': 'Ticket promedio de la semana' }
+  Object.entries(rotulos).forEach(([id, t]) => {
+    const l = document.getElementById(id)?.closest('.comparativa-card')?.querySelector('.comparativa-label')
+    if (l) l.textContent = t
+  })
+
+  grid.insertAdjacentHTML('afterbegin', `
+    <div class="comparativa-card" id="comp-card-mes">
+      <span class="comparativa-label">Ventas del mes</span>
+      <div class="comparativa-valores">
+        <div>
+          <div class="comparativa-semana-label" id="comp-mes-lbl-act">Este mes</div>
+          <div class="comparativa-valor" id="comp-mes-actual">$0</div>
+        </div>
+        <div id="comp-mes-flecha" class="comparativa-flecha"></div>
+        <div>
+          <div class="comparativa-semana-label" id="comp-mes-lbl-ant">Mes anterior</div>
+          <div class="comparativa-valor-anterior" id="comp-mes-anterior">$0</div>
+        </div>
+      </div>
+      <div id="comp-mes-diff" class="comparativa-diff"></div>
+      <span class="rep-sub" id="comp-mes-nota"></span>
+    </div>
+  `)
+
+  const tarjetas = {
+    mes: document.getElementById('comp-card-mes'),
+    semana: document.getElementById('comp-total-actual')?.closest('.comparativa-card'),
+    trans: document.getElementById('comp-trans-actual')?.closest('.comparativa-card'),
+    ticket: document.getElementById('comp-ticket-actual')?.closest('.comparativa-card')
+  }
+  COMP_ORDEN.forEach(k => { if (tarjetas[k]) grid.appendChild(tarjetas[k]) })
+})()
+
+async function cargarComparativaMensual() {
+  if (!negocioActual || !esPremium() || !document.getElementById('comp-mes-actual')) return
+  try {
+    const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: REP_TZ })
+    const ymAct = hoyStr.slice(0, 7)
+    const diaHoy = parseInt(hoyStr.slice(8, 10))
+    let y = parseInt(ymAct.slice(0, 4))
+    let m = parseInt(ymAct.slice(5, 7)) - 1
+    if (m === 0) { y--; m = 12 }
+    const ymAnt = `${y}-${String(m).padStart(2, '0')}`
+    const desde = new Date(Date.now() - 70 * 86400000).toISOString()
+
+    const ventas = await repTraerTodo(() => db.from('ventas').select('total, fecha').eq('negocio_id', negocioActual.id).gte('fecha', desde).order('fecha').order('id'))
+
+    let actual = 0, ant = 0, antMismoTramo = 0
+    ventas.forEach(v => {
+      const f = new Date(v.fecha).toLocaleDateString('en-CA', { timeZone: REP_TZ })
+      const ym = f.slice(0, 7)
+      const dd = parseInt(f.slice(8, 10))
+      const t = Number(v.total)
+      if (ym === ymAct) actual += t
+      else if (ym === ymAnt) { ant += t; if (dd <= diaHoy) antMismoTramo += t }
+    })
+
+    const sube = actual >= antMismoTramo
+    const color = sube ? 'var(--verde)' : '#dc2626'
+    document.getElementById('comp-mes-lbl-act').textContent = `Este mes (1 al ${diaHoy})`
+    document.getElementById('comp-mes-lbl-ant').textContent = `Mes anterior (1 al ${diaHoy})`
+    document.getElementById('comp-mes-actual').textContent = rMoneda(actual)
+    document.getElementById('comp-mes-anterior').textContent = rMoneda(antMismoTramo)
+
+    const fl = document.getElementById('comp-mes-flecha')
+    fl.textContent = sube ? '↑' : '↓'
+    fl.style.color = color
+
+    const df = document.getElementById('comp-mes-diff')
+    if (antMismoTramo > 0) {
+      const pct = ((actual - antMismoTramo) / antMismoTramo) * 100
+      df.textContent = `${sube ? '+' : ''}${pct.toFixed(1)}% vs mismo tramo del mes anterior`
+      df.style.color = color
+      df.style.background = sube ? 'var(--verde-suave)' : '#fee2e2'
+    } else {
+      df.textContent = 'Sin datos del mes anterior'
+      df.style.color = 'var(--texto-suave)'
+      df.style.background = 'var(--fondo)'
+    }
+    document.getElementById('comp-mes-nota').textContent = `Mes anterior completo: ${rMoneda(ant)}`
+  } catch (e) {
+    console.error('Comparativa mensual:', e)
+  }
+}
