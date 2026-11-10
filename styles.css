@@ -1945,4 +1945,32 @@ body.modo-oscuro .badge-categoria {
   .top-producto-cantidad, .top-producto-total { white-space: nowrap; }
 }
 
+/* ── EQUILIBRIO EN DASHBOARD ── */
+.eq-barra { position: relative; height: 22px; background: var(--borde); border-radius: 12px; margin: 34px 0 12px; }
+.eq-barra-base, .eq-barra-ganancia { position: absolute; top: 0; height: 100%; transition: width .6s ease; }
+.eq-barra-base { left: 0; background: #f59e0b; border-radius: 12px 0 0 12px; }
+.eq-barra-ganancia { background: var(--verde); border-radius: 0 12px 12px 0; }
+.eq-linea { position: absolute; top: -8px; bottom: -8px; width: 3px; background: var(--texto); border-radius: 2px; transform: translateX(-50%); }
+.eq-linea span { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; color: var(--texto); }
+.eq-linea-meta { background: var(--verde); }
+.eq-linea-meta span { color: var(--verde); }
+.eq-leyenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--texto-suave); margin-bottom: 14px; }
+.eq-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
+.rep-sub { display: block; font-size: 12px; font-weight: 400; color: var(--texto-suave); }
+/* ── GASTOS FIJOS EDITABLES ── */
+.eq-fila { display: grid; grid-template-columns: minmax(0, 1fr) 110px 38px; gap: 8px; align-items: center; width: 100%; }
+.eq-fila input { width: 100%; min-width: 0; padding: 8px 10px; font-size: 13px; }
 
+/* ── INFO SENSIBLE: cada zona con su candado ── */
+.info-sensible { filter: blur(4px); user-select: none; }
+body.z-costos #tabla-productos .info-sensible,
+body.z-inventario #card-valor-inventario,
+body.z-ganancia #tabla-historial .info-sensible,
+body.z-ganancia #historial-tfoot .info-sensible,
+body.z-ganancia #filtros-resumen .info-sensible,
+body.z-equilibrio #dash-equilibrio { filter: none !important; user-select: auto !important; }
+
+body.con-pin:not(.z-acciones_prod) #tabla-productos .acciones button:not([onclick*="abrirCodigoOPremium"]),
+body.con-pin:not(.z-acciones_prod) #tabla-productos .menu-accion-item:not([onclick*="abrirCodigoOPremium"]),
+body.con-pin:not(.z-acciones_venta) #tabla-historial .btn-rojo,
+body.con-pin:not(.z-acciones_venta) #tabla-historial .btn-editar { opacity: .3 !important; pointer-events: none; cursor: not-allowed; }
